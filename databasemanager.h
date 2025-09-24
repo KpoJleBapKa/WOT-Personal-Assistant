@@ -17,6 +17,7 @@ public:
     void addReplayData(const QString &filePath, const QVariantMap &data);
     QVariantMap getReplayData(const QString &filePath);
     bool clearAllData();
+    QVariantList getReplays();
 
 private:
     QString m_dataFilePath;

@@ -5,9 +5,10 @@
 #include <QStackedWidget>
 #include <QListWidget>
 
-// Включаємо заголовочні файли для сторінок
+// Включаємо заголовочні файли для сторінок та менеджера бази даних
 #include "ReplayAnalyzerPage.h"
 #include "PlayerProfilePage.h"
+#include "DatabaseManager.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -34,6 +35,9 @@ private:
     // Сторінки застосунку
     ReplayAnalyzerPage *m_replayPage;
     PlayerProfilePage *m_profilePage;
+
+    // Менеджер бази даних
+    DatabaseManager* m_dbManager;
 };
 
 #endif // MAINWINDOW_H

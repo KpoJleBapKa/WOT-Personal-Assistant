@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "ReplayAnalyzerPage.h"
 #include "PlayerProfilePage.h"
+#include "DatabaseManager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QWidget>
@@ -40,6 +41,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Встановлюємо іконку вікна
     setWindowIcon(QIcon("icon.ico"));
+
+    // Ініціалізуємо менеджер бази даних
+    m_dbManager = new DatabaseManager(this);
 
     createMenus();
     setupUI();
@@ -100,7 +104,7 @@ void MainWindow::setupUI() {
     m_stackedWidget->setStyleSheet("background-color: #3a3a3a; border-radius: 5px;");
 
     // Створення сторінок
-    m_replayPage = new ReplayAnalyzerPage(this);
+    m_replayPage = new ReplayAnalyzerPage(m_dbManager, this);
     m_profilePage = new PlayerProfilePage(this);
 
     m_stackedWidget->addWidget(m_replayPage);
@@ -160,8 +164,10 @@ void MainWindow::showSettingsDialog() {
                                       QMessageBox::Yes | QMessageBox::No);
         if (reply == QMessageBox::Yes) {
             // Тут буде логіка для очищення бази даних
-            QMessageBox::information(this, "Готово", "Всі дані успішно скинуто.");
-            settingsDialog.close();
+            if (m_dbManager->clearAllData()) {
+                QMessageBox::information(this, "Готово", "Всі дані успішно скинуто.");
+                settingsDialog.close();
+            }
         }
     });
 

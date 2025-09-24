@@ -21,13 +21,16 @@ bool DatabaseManager::loadData() {
     QFile file(m_dataFilePath);
     if (!file.open(QIODevice::ReadOnly)) {
         qDebug() << "File not found. Creating new one.";
+        saveData();
         return false;
     }
 
     QByteArray fileData = file.readAll();
     QJsonDocument doc = QJsonDocument::fromJson(fileData);
     if (doc.isNull() || !doc.isArray()) {
-        qDebug() << "Failed to parse JSON data.";
+        qDebug() << "Failed to parse JSON data. Re-creating file.";
+        file.close();
+        clearAllData();
         return false;
     }
     m_replays = doc.array().toVariantList();
@@ -45,7 +48,7 @@ bool DatabaseManager::saveData() {
 
     QJsonArray jsonArray = QJsonArray::fromVariantList(m_replays);
     QJsonDocument doc(jsonArray);
-    file.write(doc.toJson());
+    file.write(doc.toJson(QJsonDocument::Indented));
     qDebug() << "Data saved successfully.";
     file.close();
     return true;
@@ -83,8 +86,15 @@ QVariantMap DatabaseManager::getReplayData(const QString &filePath) {
 
 bool DatabaseManager::clearAllData() {
     m_replays.clear();
-    saveData();
-    qDebug() << "All data cleared.";
-    QMessageBox::information(nullptr, "Готово", "Всі дані успішно скинуто.");
-    return true;
+    if (saveData()) {
+        QMessageBox::information(nullptr, "Готово", "Всі дані успішно скинуто.");
+        return true;
+    } else {
+        QMessageBox::critical(nullptr, "Помилка", "Не вдалося скинути дані.");
+        return false;
+    }
+}
+
+QVariantList DatabaseManager::getReplays() {
+    return m_replays;
 }

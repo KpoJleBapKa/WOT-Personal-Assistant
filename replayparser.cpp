@@ -5,6 +5,7 @@
 #include <QJsonParseError>
 #include <QMessageBox>
 #include <QDebug>
+#include <QByteArray>
 
 ReplayParser::ReplayParser(QObject *parent) : QObject(parent) {}
 
@@ -17,69 +18,61 @@ QVariantMap ReplayParser::parse(const QString &filePath)
     }
 
     QVariantMap fullData;
-
-    // Зчитуємо магічне число (4 байти)
     quint32 magic;
-    if (file.read(reinterpret_cast<char*>(&magic), sizeof(magic)) != sizeof(magic)) {
-        QMessageBox::critical(nullptr, "Помилка", "Некоректний формат файлу (magic).");
-        return QVariantMap();
-    }
-
-    // Зчитуємо кількість блоків
     quint32 blockCount;
-    if (file.read(reinterpret_cast<char*>(&blockCount), sizeof(blockCount)) != sizeof(blockCount)) {
-        QMessageBox::critical(nullptr, "Помилка", "Некоректний формат файлу (block count).");
+
+    // Зчитуємо заголовок (магічне число і кількість блоків)
+    if (file.read(reinterpret_cast<char*>(&magic), sizeof(magic)) != sizeof(magic) ||
+        file.read(reinterpret_cast<char*>(&blockCount), sizeof(blockCount)) != sizeof(blockCount)) {
+        QMessageBox::critical(nullptr, "Помилка", "Некоректний формат файлу реплею.");
         return QVariantMap();
     }
 
-    // Зчитуємо розмір першого блоку JSON
-    quint32 firstBlockSize;
-    if (file.read(reinterpret_cast<char*>(&firstBlockSize), sizeof(firstBlockSize)) != sizeof(firstBlockSize)) {
-        QMessageBox::critical(nullptr, "Помилка", "Не вдалося прочитати розмір першого блоку.");
-        return QVariantMap();
-    }
+    qDebug() << "Знайдено блоків:" << blockCount;
 
-    // Зчитуємо сам перший блок
-    QByteArray firstBlockData = file.read(firstBlockSize);
-    QJsonParseError parseError;
-    QJsonDocument doc1 = QJsonDocument::fromJson(firstBlockData, &parseError);
-    if (parseError.error != QJsonParseError::NoError) {
-        QMessageBox::critical(nullptr, "Помилка парсингу", "Помилка парсингу першого JSON: " + parseError.errorString());
-        return QVariantMap();
-    }
-    fullData = doc1.object().toVariantMap();
-
-    // Якщо є другий блок
-    if (blockCount > 1) {
-        quint32 secondBlockSize;
-        if (file.read(reinterpret_cast<char*>(&secondBlockSize), sizeof(secondBlockSize)) != sizeof(secondBlockSize)) {
-            QMessageBox::critical(nullptr, "Помилка", "Не вдалося прочитати розмір другого блоку.");
-            return QVariantMap();
+    // Цикл для обробки кожного блоку даних
+    for (quint32 i = 0; i < blockCount; ++i) {
+        quint32 blockSize;
+        if (file.read(reinterpret_cast<char*>(&blockSize), sizeof(blockSize)) != sizeof(blockSize)) {
+            qWarning() << "Помилка: Не вдалося прочитати розмір блоку" << i;
+            break;
         }
 
-        QByteArray secondBlockData = file.read(secondBlockSize);
-
-        // Спробуємо розпакувати, але якщо не вдалося, беремо сирий блок
-        QByteArray decompressedSecond = qUncompress(secondBlockData);
-        if (decompressedSecond.isEmpty() && !secondBlockData.isEmpty()) {
-            qDebug() << "qUncompress не спрацював, використовую сирий блок другого JSON";
-            decompressedSecond = secondBlockData;
+        QByteArray blockData = file.read(blockSize);
+        if (blockData.isEmpty()) {
+            qWarning() << "Помилка: Блок" << i << "пустий.";
+            continue;
         }
 
-        QJsonDocument doc2 = QJsonDocument::fromJson(decompressedSecond, &parseError);
-        if (parseError.error != QJsonParseError::NoError) {
-            QMessageBox::critical(nullptr, "Помилка парсингу",
-                                  "Помилка парсингу другого JSON: " + parseError.errorString());
-            return QVariantMap();
+        QJsonParseError parseError;
+        QByteArray decompressedData = qUncompress(blockData);
+        QJsonDocument doc;
+        bool isDecompressed = false;
+
+        if (!decompressedData.isEmpty()) {
+            doc = QJsonDocument::fromJson(decompressedData, &parseError);
+            isDecompressed = true;
+        } else {
+            doc = QJsonDocument::fromJson(blockData, &parseError);
         }
 
-        QVariantMap secondData = doc2.object().toVariantMap();
-        for (auto it = secondData.constBegin(); it != secondData.constEnd(); ++it) {
-            fullData.insert(it.key(), it.value());
+        if (parseError.error == QJsonParseError::NoError) {
+            QVariantMap parsedData = doc.object().toVariantMap();
+            for (auto it = parsedData.constBegin(); it != parsedData.constEnd(); ++it) {
+                fullData.insert(it.key(), it.value());
+            }
+            qDebug() << "Успішно спарсено JSON-блок" << i + 1 << "(стиснений:" << isDecompressed << ")";
+        } else {
+            qDebug() << "Блок" << i + 1 << "не є валідним JSON. Пропускаємо.";
         }
     }
 
     file.close();
+
+    if (fullData.isEmpty()) {
+        QMessageBox::critical(nullptr, "Помилка", "Не вдалося витягти дані з реплею. Файл може бути пошкодженим або несумісним.");
+    }
+
     fullData["filePath"] = filePath;
     return fullData;
 }

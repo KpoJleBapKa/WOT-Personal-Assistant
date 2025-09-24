@@ -10,6 +10,10 @@
 #include <QJsonArray>
 #include <QThread>
 #include <QtConcurrent/QtConcurrent>
+#include <QProgressBar>
+#include <QPushButton>
+#include <QListWidget>
+#include <QTextEdit>
 
 ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *parent)
     : QWidget(parent), m_dbManager(dbManager)
@@ -120,26 +124,47 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data) {
     report += "<h2>Базова інформація</h2>";
     report += "<ul>";
 
-    QString playerName = data.contains("playerName") ? data.value("playerName").toString() : "Невідомо";
-    QString mapName = data.contains("mapDisplayName") ? data.value("mapDisplayName").toString() : "Невідомо";
-    QString vehicle = data.contains("playerVehicle") ? data.value("playerVehicle").toString() : "Невідомо";
+    QString playerName = data.value("playerName").toString();
+    QString mapName = data.value("mapDisplayName").toString();
+    QString vehicle = data.value("playerVehicle").toString();
 
-    report += "<li><b>Гравець:</b> " + playerName + "</li>";
-    report += "<li><b>Мапа:</b> " + mapName + "</li>";
-    report += "<li><b>Техніка:</b> " + vehicle + "</li>";
+    report += "<li><b>Гравець:</b> " + (playerName.isEmpty() ? "Невідомо" : playerName) + "</li>";
+    report += "<li><b>Мапа:</b> " + (mapName.isEmpty() ? "Невідомо" : mapName) + "</li>";
+    report += "<li><b>Техніка:</b> " + (vehicle.isEmpty() ? "Невідомо" : vehicle) + "</li>";
+
+    report += "<li><b>Клієнт XML:</b> " + data.value("clientVersionFromXml").toString() + "</li>";
+    report += "<li><b>Клієнт EXE:</b> " + data.value("clientVersionFromExe").toString() + "</li>";
+    report += "<li><b>Сервер:</b> " + data.value("serverName").toString() + "</li>";
     report += "</ul>";
 
-    report += "<h2>Інші ключові дані</h2>";
-    for (auto it = data.constBegin(); it != data.constEnd(); ++it) {
-        QString key = it.key();
-        if (key == "playerName" || key == "mapDisplayName" || key == "playerVehicle" || key == "filePath")
-            continue;
-        report += "<p><b>" + key + ":</b> " + it.value().toString() + "</p>";
+    report += "<h2>Ключові показники</h2>";
+    report += "<ul>";
+
+    // Перевірка наявності ключа для бойових результатів
+    if (data.contains("battleResults")) {
+        QVariantMap battleResults = data.value("battleResults").toMap();
+        QString personal = battleResults.value("personal").toString();
+
+        report += "<li><b>Результат бою:</b> " + battleResults.value("winnerTeam", "Невідомо").toString() + "</li>";
+        report += "<li><b>Особиста ефективність:</b> " + personal + "</li>";
+    } else {
+        report += "<li><b>Інформація про результати бою відсутня.</b></li>";
     }
 
-    displayResults(report);
-}
+    report += "</ul>";
 
+    // Додаємо більше деталей, якщо вони існують
+    if (data.contains("damageAssistedRadio") || data.contains("damageDealt")) {
+        report += "<h2>Бойові дані</h2>";
+        report += "<ul>";
+        report += "<li><b>Завдана шкода:</b> " + data.value("damageDealt", 0).toString() + "</li>";
+        report += "<li><b>Шкода за розвідку:</b> " + data.value("damageAssistedRadio", 0).toString() + "</li>";
+        report += "</ul>";
+    }
+
+    m_resultsTextEdit->clear();
+    m_resultsTextEdit->setHtml(report);
+}
 
 void ReplayAnalyzerPage::displayResults(const QString& results) {
     m_resultsTextEdit->clear();

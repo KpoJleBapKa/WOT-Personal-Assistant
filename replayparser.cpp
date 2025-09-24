@@ -2,6 +2,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QJsonParseError>
 #include <QMessageBox>
 #include <QDebug>
@@ -46,22 +47,25 @@ QVariantMap ReplayParser::parse(const QString &filePath)
 
         QJsonParseError parseError;
         QByteArray decompressedData = qUncompress(blockData);
-        QJsonDocument doc;
-        bool isDecompressed = false;
-
-        if (!decompressedData.isEmpty()) {
-            doc = QJsonDocument::fromJson(decompressedData, &parseError);
-            isDecompressed = true;
-        } else {
-            doc = QJsonDocument::fromJson(blockData, &parseError);
-        }
+        QJsonDocument doc = QJsonDocument::fromJson(decompressedData.isEmpty() ? blockData : decompressedData, &parseError);
 
         if (parseError.error == QJsonParseError::NoError) {
-            QVariantMap parsedData = doc.object().toVariantMap();
-            for (auto it = parsedData.constBegin(); it != parsedData.constEnd(); ++it) {
-                fullData.insert(it.key(), it.value());
+            if (doc.isObject()) {
+                QVariantMap parsedData = doc.object().toVariantMap();
+                for (auto it = parsedData.constBegin(); it != parsedData.constEnd(); ++it) {
+                    fullData.insert(it.key(), it.value());
+                }
+                qDebug() << "Успішно спарсено JSON-об'єкт" << i + 1;
+            } else if (doc.isArray()) {
+                QVariantList parsedList = doc.array().toVariantList();
+                if (!parsedList.isEmpty() && parsedList.first().canConvert<QVariantMap>()) {
+                    QVariantMap parsedData = parsedList.first().toMap();
+                    for (auto it = parsedData.constBegin(); it != parsedData.constEnd(); ++it) {
+                        fullData.insert(it.key(), it.value());
+                    }
+                    qDebug() << "Успішно спарсено JSON-масив" << i + 1;
+                }
             }
-            qDebug() << "Успішно спарсено JSON-блок" << i + 1 << "(стиснений:" << isDecompressed << ")";
         } else {
             qDebug() << "Блок" << i + 1 << "не є валідним JSON. Пропускаємо.";
         }

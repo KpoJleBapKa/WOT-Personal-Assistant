@@ -24,7 +24,6 @@ ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *pare
     m_selectFileButton = new QPushButton("Вибрати реплей...", this);
     m_selectFileButton->setCursor(Qt::PointingHandCursor);
 
-    // Додано нову кнопку для очищення реплеїв
     m_clearReplaysButton = new QPushButton("Очистити реплеї", this);
     m_clearReplaysButton->setCursor(Qt::PointingHandCursor);
 
@@ -41,7 +40,7 @@ ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *pare
     m_progressBar->setAlignment(Qt::AlignCenter);
 
     topLayout->addWidget(m_selectFileButton);
-    topLayout->addWidget(m_clearReplaysButton); // Розміщення нової кнопки в макеті
+    topLayout->addWidget(m_clearReplaysButton);
     topLayout->addStretch();
 
     mainLayout->addLayout(topLayout);
@@ -54,8 +53,6 @@ ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *pare
     connect(m_selectFileButton, &QPushButton::clicked, this, &ReplayAnalyzerPage::onSelectFileButtonClicked);
     connect(m_replayList, &QListWidget::itemClicked, this, &ReplayAnalyzerPage::onReplayListItemClicked);
     connect(&m_watcher, &QFutureWatcher<QVariantMap>::finished, this, &ReplayAnalyzerPage::handleAnalysisFinished);
-
-    // Підключення нової кнопки до методу очищення
     connect(m_clearReplaysButton, &QPushButton::clicked, this, &ReplayAnalyzerPage::onClearReplaysButtonClicked);
 
     loadCachedReplays();
@@ -126,7 +123,6 @@ void ReplayAnalyzerPage::handleAnalysisFinished() {
     displayStructuredResults(analysisResults);
 }
 
-// 🔹 Новий метод для структурованого виводу
 void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data) {
     QString report = "<h1>Звіт про аналіз реплею</h1>";
     report += "<h2>Базова інформація</h2>";
@@ -139,7 +135,6 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data) {
     report += "<li><b>Гравець:</b> " + (playerName.isEmpty() ? "Невідомо" : playerName) + "</li>";
     report += "<li><b>Мапа:</b> " + (mapName.isEmpty() ? "Невідомо" : mapName) + "</li>";
     report += "<li><b>Техніка:</b> " + (vehicle.isEmpty() ? "Невідомо" : vehicle) + "</li>";
-
     report += "<li><b>Клієнт XML:</b> " + data.value("clientVersionFromXml").toString() + "</li>";
     report += "<li><b>Клієнт EXE:</b> " + data.value("clientVersionFromExe").toString() + "</li>";
     report += "<li><b>Сервер:</b> " + data.value("serverName").toString() + "</li>";
@@ -148,68 +143,82 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data) {
     report += "<h2>Ключові показники</h2>";
     report += "<ul>";
 
-    // Перевірка наявності ключа для бойових результатів
-    if (data.contains("battleResults")) {
-        QVariantMap battleResults = data.value("battleResults").toMap();
-        QString personal = battleResults.value("personal").toString();
-
-        report += "<li><b>Результат бою:</b> " + battleResults.value("winnerTeam", "Невідомо").toString() + "</li>";
-        report += "<li><b>Особиста ефективність:</b> " + personal + "</li>";
-    } else {
-        report += "<li><b>Інформація про результати бою відсутня.</b></li>";
-    }
-
-    report += "</ul>";
-
-    // Додаємо більше деталей, якщо вони існують
-    if (data.contains("damageAssistedRadio") || data.contains("damageDealt")) {
-        report += "<h2>Бойові дані</h2>";
-        report += "<ul>";
-        report += "<li><b>Завдана шкода:</b> " + data.value("damageDealt", 0).toString() + "</li>";
-        report += "<li><b>Шкода за розвідку:</b> " + data.value("damageAssistedRadio", 0).toString() + "</li>";
-        report += "</ul>";
-    }
-
-    // 🔹 Додано новий розділ для детальних результатів гравця
-    report += "<h2>Результати гравця</h2>";
-    report += "<ul>";
-
-    QString playerAccountId;
+    int playerTeam = 0;
     if (data.contains("vehicles")) {
         QVariantMap vehiclesData = data.value("vehicles").toMap();
-        QString myPlayerName = data.value("playerName").toString();
-
-        // Пошук accountDBID (ключа в мапі vehicles) за ім'ям гравця
         for (auto it = vehiclesData.constBegin(); it != vehiclesData.constEnd(); ++it) {
             QVariantMap vehicleInfo = it.value().toMap();
-            if (vehicleInfo.value("name").toString() == myPlayerName) {
-                playerAccountId = it.key();
+            if (vehicleInfo.value("name").toString() == playerName) {
+                playerTeam = vehicleInfo.value("team").toInt();
                 break;
             }
         }
     }
 
-
-    if (!playerAccountId.isEmpty() && data.contains("battleResults")) {
-        QVariantMap battleResults = data.value("battleResults").toMap();
-        if (battleResults.contains(playerAccountId)) {
-            QVariantMap playerStats = battleResults.value(playerAccountId).toMap();
-
-            report += "<li><b>Нанесено шкоди:</b> " + playerStats.value("damageDealt", 0).toString() + "</li>";
-            report += "<li><b>Шкода за розвідку:</b> " + playerStats.value("damageAssistedRadio", 0).toString() + "</li>";
-            report += "<li><b>Заблоковано шкоди:</b> " + playerStats.value("damageBlockedByArmor", 0).toString() + "</li>";
-            report += "<li><b>Знищено:</b> " + playerStats.value("frags", 0).toString() + "</li>";
-            report += "<li><b>Постріли:</b> " + playerStats.value("shots", 0).toString() + "</li>";
-            report += "<li><b>Влучання:</b> " + playerStats.value("hits", 0).toString() + "</li>";
-            report += "<li><b>Пробиття:</b> " + playerStats.value("piercings", 0).toString() + "</li>";
-            report += "<li><b>Отримано досвіду:</b> " + playerStats.value("xp", 0).toString() + "</li>";
-            report += "<li><b>Отримано кредитів:</b> " + playerStats.value("credits", 0).toString() + "</li>";
-
-        } else {
-            report += "<li>Не вдалося знайти результати для гравця з ID " + playerAccountId + ".</li>";
+    if (data.contains("winnerTeam") && playerTeam != 0) {
+        int winnerTeam = data.value("winnerTeam").toInt();
+        QString outcome = "Нічия";
+        if (winnerTeam == playerTeam) {
+            outcome = "Перемога";
+        } else if (winnerTeam != 0) {
+            outcome = "Поразка";
         }
+        report += "<li><b>Результат бою:</b> " + outcome + "</li>";
     } else {
-        report += "<li>Дані про результати гравця не знайдено.</li>";
+        report += "<li><b>Інформація про результати бою відсутня.</b></li>";
+    }
+    report += "</ul>";
+
+    report += "<h2>Результати гравця: " + (playerName.isEmpty() ? "Невідомо" : playerName) + "</h2>";
+    report += "<ul>";
+
+    if (data.contains("personal") && data.contains("playerID")) {
+        QVariantMap personalData = data.value("personal").toMap();
+        quint64 playerID = data.value("playerID").toULongLong();
+        bool foundStats = false;
+        int vehicleCount = 0;
+
+        for (auto it = personalData.constBegin(); it != personalData.constEnd(); ++it) {
+            if (it.key() != "avatar" && it.value().toMap().value("accountDBID").toULongLong() == playerID) {
+                vehicleCount++;
+            }
+        }
+
+        if (vehicleCount > 1) {
+            report += "<p><i>У цьому бою гравець використав декілька одиниць техніки. Нижче наведено статистику для кожної з них.</i></p>";
+        }
+
+        for (auto it = personalData.constBegin(); it != personalData.constEnd(); ++it) {
+            // ▼▼▼ ОСЬ ТУТ ЗМІНА ▼▼▼
+            if (it.key() == "avatar") {
+                continue; // Пропускаємо ітерацію, якщо ключ - "avatar"
+            }
+            // ▲▲▲ КІНЕЦЬ ЗМІНИ ▲▲▲
+
+            QVariantMap vehicleStats = it.value().toMap();
+            if (vehicleStats.value("accountDBID").toULongLong() == playerID) {
+                foundStats = true;
+                report += "<li><b>На техніці (ID " + it.key() + "):</b></li><ul>";
+                report += "<li><b>Нанесено шкоди:</b> " + vehicleStats.value("damageDealt", 0).toString() + "</li>";
+                report += "<li><b>Допомога у збитку (радіо):</b> " + vehicleStats.value("damageAssistedRadio", 0).toString() + "</li>";
+                report += "<li><b>Допомога у збитку (гусениці):</b> " + vehicleStats.value("damageAssistedTrack", 0).toString() + "</li>";
+                report += "<li><b>Заблоковано шкоди:</b> " + vehicleStats.value("damageBlockedByArmor", 0).toString() + "</li>";
+                report += "<li><b>Знищено:</b> " + vehicleStats.value("kills", 0).toString() + "</li>";
+                report += "<li><b>Постріли:</b> " + vehicleStats.value("shots", 0).toString() + "</li>";
+                report += "<li><b>Влучання:</b> " + vehicleStats.value("directHits", 0).toString() + "</li>";
+                report += "<li><b>Пробиття:</b> " + vehicleStats.value("piercings", 0).toString() + "</li>";
+                report += "<li><b>Отримано досвіду:</b> " + vehicleStats.value("xp", 0).toString() + "</li>";
+                report += "<li><b>Отримано кредитів:</b> " + vehicleStats.value("credits", 0).toString() + "</li>";
+                report += "</ul>";
+            }
+        }
+
+        if (!foundStats) {
+            report += "<li>Не вдалося знайти результати для гравця з ID " + QString::number(playerID) + ".</li>";
+        }
+
+    } else {
+        report += "<li>Дані про результати гравця ('personal' або 'playerID') не знайдено.</li>";
     }
     report += "</ul>";
 
@@ -222,18 +231,13 @@ void ReplayAnalyzerPage::displayResults(const QString& results) {
     m_resultsTextEdit->setHtml(results);
 }
 
-// 🔹 Додано новий метод для обробки натискання кнопки "Очистити реплеї"
 void ReplayAnalyzerPage::onClearReplaysButtonClicked() {
-    // Очищення даних з бази даних.
-    // Увага: Цей метод m_dbManager->clearReplays() потрібно реалізувати
-    // у класі DatabaseManager для видалення даних з бази.
     if (m_dbManager) {
         m_dbManager->clearAllData();
     }
 
-    // Очищення UI
     m_replayList->clear();
-    m_replayList->addItem("Завантажені реплеї:"); // Додаємо назад заголовок
+    m_replayList->addItem("Завантажені реплеї:");
     m_resultsTextEdit->clear();
     m_resultsTextEdit->setPlainText("Результати аналізу будуть відображатися тут.");
 

@@ -1,10 +1,15 @@
 #ifndef METRICSCALCULATOR_H
 #define METRICSCALCULATOR_H
 
-class MetricsCalculator
+#include <QObject>
+#include <QVariantMap>
+
+class MetricsCalculator : public QObject
 {
+    Q_OBJECT
 public:
-    MetricsCalculator();
+    explicit MetricsCalculator(QObject *parent = nullptr);
+    QVariantMap calculate(const QVariantMap &replayData);
 };
 
 #endif // METRICSCALCULATOR_H

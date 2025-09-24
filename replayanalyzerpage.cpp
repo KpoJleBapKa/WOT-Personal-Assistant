@@ -5,19 +5,17 @@
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QDebug>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
-#include <QThread>
 #include <QtConcurrent/QtConcurrent>
-#include <QProgressBar>
 #include <QPushButton>
+#include <QProgressBar>
 #include <QListWidget>
 #include <QTextEdit>
 
+// Конструктор: ініціалізуємо нові класи
 ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *parent)
     : QWidget(parent), m_dbManager(dbManager)
 {
+    // ... (код ініціалізації кнопок та інших елементів залишається без змін)
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     QHBoxLayout *topLayout = new QHBoxLayout();
 
@@ -47,8 +45,13 @@ ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *pare
     mainLayout->addWidget(m_progressBar);
     mainLayout->addWidget(m_replayList);
     mainLayout->addWidget(m_resultsTextEdit);
+    // ...
 
     m_replayParser = new ReplayParser(this);
+    // 🔹 Ініціалізація нових аналітичних модулів
+    m_metricsCalculator = new MetricsCalculator(this);
+    m_behaviorAnalyzer = new BehaviorAnalyzer(this);
+    m_recommenderSystem = new RecommenderSystem(this);
 
     connect(m_selectFileButton, &QPushButton::clicked, this, &ReplayAnalyzerPage::onSelectFileButtonClicked);
     connect(m_replayList, &QListWidget::itemClicked, this, &ReplayAnalyzerPage::onReplayListItemClicked);
@@ -58,8 +61,9 @@ ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *pare
     loadCachedReplays();
 }
 
-ReplayAnalyzerPage::~ReplayAnalyzerPage() {}
+ReplayAnalyzerPage::~ReplayAnalyzerPage() {} // Деструктор без змін
 
+// ... (методи onSelectFileButtonClicked, onReplayListItemClicked, loadCachedReplays, analyzeReplay, handleAnalysisFinished залишаються без змін)
 void ReplayAnalyzerPage::onSelectFileButtonClicked() {
     QString filePath = QFileDialog::getOpenFileName(this, "Вибрати реплей", "", "World of Tanks Replays (*.wotreplay)");
     if (!filePath.isEmpty()) {
@@ -123,7 +127,11 @@ void ReplayAnalyzerPage::handleAnalysisFinished() {
     displayStructuredResults(analysisResults);
 }
 
-void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data) {
+
+// 🔹 Головний метод відображення, який тепер використовує нові класи
+void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
+{
+    // ... (код для виводу "Базова інформація", "Ключові показники" та "Результати гравця" залишається без змін)
     QString report = "<h1>Звіт про аналіз реплею</h1>";
     report += "<h2>Базова інформація</h2>";
     report += "<ul>";
@@ -189,11 +197,9 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data) {
         }
 
         for (auto it = personalData.constBegin(); it != personalData.constEnd(); ++it) {
-            // ▼▼▼ ОСЬ ТУТ ЗМІНА ▼▼▼
             if (it.key() == "avatar") {
-                continue; // Пропускаємо ітерацію, якщо ключ - "avatar"
+                continue;
             }
-            // ▲▲▲ КІНЕЦЬ ЗМІНИ ▲▲▲
 
             QVariantMap vehicleStats = it.value().toMap();
             if (vehicleStats.value("accountDBID").toULongLong() == playerID) {
@@ -214,22 +220,66 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data) {
         }
 
         if (!foundStats) {
-            report += "<li>Не вдалося знайти результати для гравця з ID " + QString::number(playerID) + ".</li>";
+            report += "<li>Не вдалося знайти результати для гравця.</li>";
         }
-
     } else {
-        report += "<li>Дані про результати гравця ('personal' або 'playerID') не знайдено.</li>";
+        report += "<li>Дані про результати гравця не знайдено.</li>";
     }
     report += "</ul>";
+    // ...
+
+    // 🔹 Новий блок: Виклик аналітичних модулів та відображення їх результатів
+    QVariantMap metrics = m_metricsCalculator->calculate(data);
+    QVariantMap behavior = m_behaviorAnalyzer->analyze(data, metrics);
+    QStringList recommendations = m_recommenderSystem->generate(metrics, behavior);
+
+    // Відображення метрик
+    report += "<h2>Ключові метрики ефективності</h2>";
+    if (!metrics.isEmpty()) {
+        report += "<ul>";
+        report += "<li><b>Точність стрільби:</b> " + metrics.value("accuracy").toString() + "</li>";
+        report += "<li><b>Ефективність пробиття:</b> " + metrics.value("penetrationRatio").toString() + "</li>";
+        report += "<li><b>Внесок у перемогу (умовний бал):</b> " + metrics.value("contributionScore").toString() + "</li>";
+        report += "<li><b>Час виживання:</b> " + metrics.value("survivalTime").toString() + "</li>";
+        report += "</ul>";
+    } else {
+        report += "<p>Недостатньо даних для розрахунку.</p>";
+    }
+
+    // Відображення аналізу поведінки
+    report += "<h2>Аналіз ігрової поведінки</h2>";
+    if (!behavior.isEmpty()) {
+        report += "<ul>";
+        report += "<li><b>Стиль гри:</b> " + behavior.value("gameStyle").toString() + "</li>";
+        report += "<li><b>Ефективність стрільби:</b> " + behavior.value("shootingEffectiveness").toString() + "</li>";
+        report += "<li><b>Командна гра:</b> " + behavior.value("teamPlay").toString() + "</li>";
+        report += "</ul>";
+    } else {
+        report += "<p>Недостатньо даних для аналізу.</p>";
+    }
+
+    // Відображення рекомендацій
+    report += "<h2>Персональні рекомендації</h2>";
+    if (!recommendations.isEmpty()) {
+        report += "<ul>";
+        for (const QString &rec : recommendations) {
+            report += "<li>" + rec + "</li>";
+        }
+        report += "</ul>";
+    } else {
+        report += "<p>Рекомендації не сформовано.</p>";
+    }
 
     m_resultsTextEdit->clear();
     m_resultsTextEdit->setHtml(report);
 }
 
+
 void ReplayAnalyzerPage::displayResults(const QString& results) {
     m_resultsTextEdit->clear();
     m_resultsTextEdit->setHtml(results);
 }
+
 
 void ReplayAnalyzerPage::onClearReplaysButtonClicked() {
     if (m_dbManager) {

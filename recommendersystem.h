@@ -1,10 +1,16 @@
 #ifndef RECOMMENDERSYSTEM_H
 #define RECOMMENDERSYSTEM_H
 
-class RecommenderSystem
+#include <QObject>
+#include <QVariantMap>
+#include <QStringList>
+
+class RecommenderSystem : public QObject
 {
+    Q_OBJECT
 public:
-    RecommenderSystem();
+    explicit RecommenderSystem(QObject *parent = nullptr);
+    QStringList generate(const QVariantMap &metrics, const QVariantMap &analysis);
 };
 
 #endif // RECOMMENDERSYSTEM_H

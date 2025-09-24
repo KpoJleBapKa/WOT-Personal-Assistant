@@ -7,11 +7,13 @@
 
 #include "ReplayParser.h"
 #include "DatabaseManager.h"
+#include "MetricsCalculator.h"    // 🔹 Додано
+#include "BehaviorAnalyzer.h"     // 🔹 Додано
+#include "RecommenderSystem.h"    // 🔹 Додано
 #include <QListWidget>
 
 class QPushButton;
 class QProgressBar;
-class QListWidget;
 class QTextEdit;
 
 class ReplayAnalyzerPage : public QWidget
@@ -26,7 +28,7 @@ private slots:
     void onSelectFileButtonClicked();
     void onReplayListItemClicked(QListWidgetItem *item);
     void handleAnalysisFinished();
-    void onClearReplaysButtonClicked(); // 🔹 Додано оголошення нового слоту
+    void onClearReplaysButtonClicked();
 
 private:
     void analyzeReplay(const QString &filePath);
@@ -35,12 +37,17 @@ private:
     void displayResults(const QString& results);
 
     QPushButton *m_selectFileButton;
-    QPushButton *m_clearReplaysButton; // 🔹 Додано оголошення нової кнопки
+    QPushButton *m_clearReplaysButton;
     QProgressBar *m_progressBar;
     QListWidget *m_replayList;
     QTextEdit *m_resultsTextEdit;
+
     ReplayParser *m_replayParser;
     DatabaseManager *m_dbManager;
+    MetricsCalculator *m_metricsCalculator;   // 🔹 Додано
+    BehaviorAnalyzer *m_behaviorAnalyzer;     // 🔹 Додано
+    RecommenderSystem *m_recommenderSystem;   // 🔹 Додано
+
     QFutureWatcher<QVariantMap> m_watcher;
 };
 

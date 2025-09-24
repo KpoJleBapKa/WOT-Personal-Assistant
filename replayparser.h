@@ -12,7 +12,7 @@ public:
     QVariantMap parse(const QString &filePath);
 
 private:
-    QByteArray readJsonBlock(const QString &filePath);
+    QByteArray decompress(const QByteArray &data);
 };
 
 #endif // REPLAYPARSER_H

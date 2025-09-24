@@ -42,7 +42,7 @@ MainWindow::MainWindow(QWidget *parent)
     // Встановлюємо іконку вікна
     setWindowIcon(QIcon("icon.ico"));
 
-    // Ініціалізуємо менеджер бази даних
+    // Ініціалізуємо менеджер бази даних перед використанням
     m_dbManager = new DatabaseManager(this);
 
     createMenus();
@@ -104,6 +104,7 @@ void MainWindow::setupUI() {
     m_stackedWidget->setStyleSheet("background-color: #3a3a3a; border-radius: 5px;");
 
     // Створення сторінок
+    // Тут ми передаємо m_dbManager у конструктор ReplayAnalyzerPage
     m_replayPage = new ReplayAnalyzerPage(m_dbManager, this);
     m_profilePage = new PlayerProfilePage(this);
 
@@ -163,7 +164,6 @@ void MainWindow::showSettingsDialog() {
         reply = QMessageBox::question(this, "Скидання даних", "Ви впевнені, що хочете скинути всі дані аналізу?",
                                       QMessageBox::Yes | QMessageBox::No);
         if (reply == QMessageBox::Yes) {
-            // Тут буде логіка для очищення бази даних
             if (m_dbManager->clearAllData()) {
                 QMessageBox::information(this, "Готово", "Всі дані успішно скинуто.");
                 settingsDialog.close();

@@ -7,6 +7,7 @@
 #include <QListWidget>
 #include <QProgressBar>
 #include <QVariantMap>
+#include <QFutureWatcher>
 
 #include "DatabaseManager.h"
 #include "ReplayParser.h"
@@ -30,6 +31,9 @@ public slots:
 private:
     void displayResults(const QString& results);
     void loadCachedReplays();
+
+    // 🔹 Новий метод для структурованого звіту
+    void displayStructuredResults(const QVariantMap &data);
 
     QPushButton *m_selectFileButton;
     QListWidget *m_replayList;

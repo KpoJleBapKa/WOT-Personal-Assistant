@@ -2,18 +2,20 @@
 #define REPLAYANALYZERPAGE_H
 
 #include <QWidget>
-#include <QTextEdit>
-#include <QPushButton>
-#include <QListWidget>
-#include <QProgressBar>
-#include <QVariantMap>
 #include <QFutureWatcher>
+#include <QVariantMap>
 
-#include "DatabaseManager.h"
 #include "ReplayParser.h"
-#include <QtConcurrent/QtConcurrent>
+#include "DatabaseManager.h"
+#include <QListWidget>
 
-class ReplayAnalyzerPage : public QWidget {
+class QPushButton;
+class QProgressBar;
+class QListWidget;
+class QTextEdit;
+
+class ReplayAnalyzerPage : public QWidget
+{
     Q_OBJECT
 
 public:
@@ -24,23 +26,21 @@ private slots:
     void onSelectFileButtonClicked();
     void onReplayListItemClicked(QListWidgetItem *item);
     void handleAnalysisFinished();
-
-public slots:
-    void analyzeReplay(const QString &filePath);
+    void onClearReplaysButtonClicked(); // 🔹 Додано оголошення нового слоту
 
 private:
-    void displayResults(const QString& results);
+    void analyzeReplay(const QString &filePath);
     void loadCachedReplays();
-
-    // 🔹 Новий метод для структурованого звіту
     void displayStructuredResults(const QVariantMap &data);
+    void displayResults(const QString& results);
 
     QPushButton *m_selectFileButton;
+    QPushButton *m_clearReplaysButton; // 🔹 Додано оголошення нової кнопки
+    QProgressBar *m_progressBar;
     QListWidget *m_replayList;
     QTextEdit *m_resultsTextEdit;
-    QProgressBar *m_progressBar;
-    DatabaseManager *m_dbManager;
     ReplayParser *m_replayParser;
+    DatabaseManager *m_dbManager;
     QFutureWatcher<QVariantMap> m_watcher;
 };
 

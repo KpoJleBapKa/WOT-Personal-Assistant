@@ -1,4 +1,4 @@
-#include "ReplayAnalyzerPage.h"
+#include "replayanalyzerpage.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFileDialog>
@@ -24,6 +24,10 @@ ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *pare
     m_selectFileButton = new QPushButton("Вибрати реплей...", this);
     m_selectFileButton->setCursor(Qt::PointingHandCursor);
 
+    // Додано нову кнопку для очищення реплеїв
+    m_clearReplaysButton = new QPushButton("Очистити реплеї", this);
+    m_clearReplaysButton->setCursor(Qt::PointingHandCursor);
+
     m_replayList = new QListWidget(this);
     m_replayList->addItem("Завантажені реплеї:");
 
@@ -37,6 +41,7 @@ ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *pare
     m_progressBar->setAlignment(Qt::AlignCenter);
 
     topLayout->addWidget(m_selectFileButton);
+    topLayout->addWidget(m_clearReplaysButton); // Розміщення нової кнопки в макеті
     topLayout->addStretch();
 
     mainLayout->addLayout(topLayout);
@@ -49,6 +54,9 @@ ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *pare
     connect(m_selectFileButton, &QPushButton::clicked, this, &ReplayAnalyzerPage::onSelectFileButtonClicked);
     connect(m_replayList, &QListWidget::itemClicked, this, &ReplayAnalyzerPage::onReplayListItemClicked);
     connect(&m_watcher, &QFutureWatcher<QVariantMap>::finished, this, &ReplayAnalyzerPage::handleAnalysisFinished);
+
+    // Підключення нової кнопки до методу очищення
+    connect(m_clearReplaysButton, &QPushButton::clicked, this, &ReplayAnalyzerPage::onClearReplaysButtonClicked);
 
     loadCachedReplays();
 }
@@ -162,6 +170,49 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data) {
         report += "</ul>";
     }
 
+    // 🔹 Додано новий розділ для детальних результатів гравця
+    report += "<h2>Результати гравця</h2>";
+    report += "<ul>";
+
+    QString playerAccountId;
+    if (data.contains("vehicles")) {
+        QVariantMap vehiclesData = data.value("vehicles").toMap();
+        QString myPlayerName = data.value("playerName").toString();
+
+        // Пошук accountDBID (ключа в мапі vehicles) за ім'ям гравця
+        for (auto it = vehiclesData.constBegin(); it != vehiclesData.constEnd(); ++it) {
+            QVariantMap vehicleInfo = it.value().toMap();
+            if (vehicleInfo.value("name").toString() == myPlayerName) {
+                playerAccountId = it.key();
+                break;
+            }
+        }
+    }
+
+
+    if (!playerAccountId.isEmpty() && data.contains("battleResults")) {
+        QVariantMap battleResults = data.value("battleResults").toMap();
+        if (battleResults.contains(playerAccountId)) {
+            QVariantMap playerStats = battleResults.value(playerAccountId).toMap();
+
+            report += "<li><b>Нанесено шкоди:</b> " + playerStats.value("damageDealt", 0).toString() + "</li>";
+            report += "<li><b>Шкода за розвідку:</b> " + playerStats.value("damageAssistedRadio", 0).toString() + "</li>";
+            report += "<li><b>Заблоковано шкоди:</b> " + playerStats.value("damageBlockedByArmor", 0).toString() + "</li>";
+            report += "<li><b>Знищено:</b> " + playerStats.value("frags", 0).toString() + "</li>";
+            report += "<li><b>Постріли:</b> " + playerStats.value("shots", 0).toString() + "</li>";
+            report += "<li><b>Влучання:</b> " + playerStats.value("hits", 0).toString() + "</li>";
+            report += "<li><b>Пробиття:</b> " + playerStats.value("piercings", 0).toString() + "</li>";
+            report += "<li><b>Отримано досвіду:</b> " + playerStats.value("xp", 0).toString() + "</li>";
+            report += "<li><b>Отримано кредитів:</b> " + playerStats.value("credits", 0).toString() + "</li>";
+
+        } else {
+            report += "<li>Не вдалося знайти результати для гравця з ID " + playerAccountId + ".</li>";
+        }
+    } else {
+        report += "<li>Дані про результати гравця не знайдено.</li>";
+    }
+    report += "</ul>";
+
     m_resultsTextEdit->clear();
     m_resultsTextEdit->setHtml(report);
 }
@@ -169,4 +220,22 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data) {
 void ReplayAnalyzerPage::displayResults(const QString& results) {
     m_resultsTextEdit->clear();
     m_resultsTextEdit->setHtml(results);
+}
+
+// 🔹 Додано новий метод для обробки натискання кнопки "Очистити реплеї"
+void ReplayAnalyzerPage::onClearReplaysButtonClicked() {
+    // Очищення даних з бази даних.
+    // Увага: Цей метод m_dbManager->clearReplays() потрібно реалізувати
+    // у класі DatabaseManager для видалення даних з бази.
+    if (m_dbManager) {
+        m_dbManager->clearAllData();
+    }
+
+    // Очищення UI
+    m_replayList->clear();
+    m_replayList->addItem("Завантажені реплеї:"); // Додаємо назад заголовок
+    m_resultsTextEdit->clear();
+    m_resultsTextEdit->setPlainText("Результати аналізу будуть відображатися тут.");
+
+    QMessageBox::information(this, "Готово", "Всі збережені реплеї видалено.");
 }

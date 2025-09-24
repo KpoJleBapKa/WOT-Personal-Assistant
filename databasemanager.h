@@ -2,26 +2,28 @@
 #define DATABASEMANAGER_H
 
 #include <QObject>
-#include <QVariantMap>
 #include <QVariantList>
+#include <QVariantMap>
 #include <QString>
 
-class DatabaseManager : public QObject {
+class DatabaseManager : public QObject
+{
     Q_OBJECT
 
 public:
     explicit DatabaseManager(QObject *parent = nullptr);
 
-    bool loadData();
-    bool saveData();
     void addReplayData(const QString &filePath, const QVariantMap &data);
     QVariantMap getReplayData(const QString &filePath);
-    bool clearAllData();
     QVariantList getReplays();
+    bool clearAllData(); // 🔹 Оголошення методу clearAllData()
 
 private:
-    QString m_dataFilePath;
+    bool loadData();
+    bool saveData();
+
     QVariantList m_replays;
+    QString m_dataFilePath;
 };
 
 #endif // DATABASEMANAGER_H

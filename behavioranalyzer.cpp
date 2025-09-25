@@ -1,62 +1,79 @@
 #include "behavioranalyzer.h"
 #include <QDebug>
 
+QString getPerformanceGrade(double totalDamage, double assistedDamage, const QString& vehicleType, int tier)
+{
+    // ❗️ ЗАХИСТ ВІД ПОМИЛОК ПАРСЕРА
+    if (tier == 0 || vehicleType == "unknown") {
+        return "Неможливо визначити (помилка даних)";
+    }
+
+    double mainMetric = 0;
+    if (vehicleType.contains("light", Qt::CaseInsensitive)) {
+        mainMetric = assistedDamage;
+    } else {
+        mainMetric = totalDamage;
+    }
+
+    // --- Ваші порогові значення ---
+    if (!vehicleType.contains("light", Qt::CaseInsensitive)) {
+        switch (tier) {
+        case 10:
+            if (mainMetric >= 5000) return "Еталонний"; if (mainMetric >= 4000) return "Дуже хороший"; if (mainMetric >= 3500) return "Хороший"; if (mainMetric >= 3000) return "Непоганий"; if (mainMetric >= 2500) return "Посередній"; if (mainMetric >= 2000) return "Нижче середнього"; if (mainMetric >= 1500) return "Поганий"; break;
+        case 9:
+            if (mainMetric >= 4000) return "Еталонний"; if (mainMetric >= 3500) return "Дуже хороший"; if (mainMetric >= 3000) return "Хороший"; if (mainMetric >= 2500) return "Непоганий"; if (mainMetric >= 2000) return "Посередній"; if (mainMetric >= 1500) return "Нижче середнього"; if (mainMetric >= 1000) return "Поганий"; break;
+        case 8:
+            if (vehicleType.contains("heavy", Qt::CaseInsensitive)) {
+                if (mainMetric >= 3500) return "Еталонний"; if (mainMetric >= 3000) return "Дуже хороший"; if (mainMetric >= 2500) return "Хороший"; if (mainMetric >= 2000) return "Непоганий"; if (mainMetric >= 1500) return "Посередній"; if (mainMetric >= 1000) return "Нижче середнього"; if (mainMetric >= 1000) return "Поганий";
+            } else {
+                if (mainMetric >= 3000) return "Еталонний"; if (mainMetric >= 2500) return "Хороший"; if (mainMetric >= 2000) return "Непоганий"; if (mainMetric >= 1500) return "Посередній"; if (mainMetric >= 1000) return "Нижче середнього"; if (mainMetric >= 1000) return "Поганий";
+            } break;
+        }
+    } else {
+        switch (tier) {
+        case 10:
+            if (mainMetric >= 6000) return "Еталонний"; if (mainMetric >= 5000) return "Дуже хороший"; if (mainMetric >= 4500) return "Хороший"; if (mainMetric >= 4000) return "Непоганий"; if (mainMetric >= 3000) return "Посередній"; if (mainMetric >= 2500) return "Нижче середнього"; if (mainMetric >= 2000) return "Поганий"; break;
+        case 9:
+            if (mainMetric >= 5000) return "Еталонний"; if (mainMetric >= 4500) return "Дуже хороший"; if (mainMetric >= 4000) return "Хороший"; if (mainMetric >= 3500) return "Непоганий"; if (mainMetric >= 3000) return "Посередній"; if (mainMetric >= 2000) return "Нижче середнього"; if (mainMetric >= 1500) return "Поганий"; break;
+        case 8:
+            if (mainMetric >= 5000) return "Еталонний"; if (mainMetric >= 4500) return "Дуже хороший"; if (mainMetric >= 3500) return "Хороший"; if (mainMetric >= 3000) return "Непоганий"; if (mainMetric >= 2500) return "Посередній"; if (mainMetric >= 2000) return "Нижче середнього"; if (mainMetric >= 2000) return "Поганий"; break;
+        }
+    }
+
+    return "Жахливий";
+}
+
 BehaviorAnalyzer::BehaviorAnalyzer(QObject *parent) : QObject(parent) {}
 
 QVariantMap BehaviorAnalyzer::analyze(const QVariantMap &replayData, const QVariantMap &metrics)
 {
     QVariantMap analysis;
-    double damageDealt = metrics.value("totalDamageDealt", 0).toDouble();
+    if (metrics.isEmpty()) return analysis;
 
-    // 1. Аналіз стилю гри (агресивний/пасивний)
-    // Це дуже спрощена модель. В ідеалі, потрібно порівнювати з середніми показниками на цьому танку.
-    QString gameStyle;
-    if (damageDealt > 3500) {
-        gameStyle = "Дуже агресивний";
-    } else if (damageDealt > 2000) {
-        gameStyle = "Активний";
-    } else if (damageDealt > 1000) {
-        gameStyle = "Обережний";
+    double totalDamage = metrics.value("totalDamageDealt", 0.0).toDouble();
+    double assistedDamage = metrics.value("damageAssisted", 0.0).toDouble();
+    double blockedDamage = metrics.value("damageBlockedByArmor", 0.0).toDouble();
+    QString vehicleType = metrics.value("vehicleType").toString();
+    int tier = metrics.value("vehicleTier", 0).toInt();
+
+    QString performanceGrade = getPerformanceGrade(totalDamage, assistedDamage, vehicleType, tier);
+    analysis["performanceGrade"] = performanceGrade;
+
+    QString rolePerformance = "Основний внесок: ";
+    if (vehicleType.contains("light", Qt::CaseInsensitive)) {
+        rolePerformance += "допомога команді.";
     } else {
-        gameStyle = "Пасивний";
-    }
-    analysis["gameStyle"] = gameStyle;
-
-
-    // 2. Аналіз ефективності стрільби
-    double penetrationRatio = metrics.value("penetrationRatio").toString().remove("%").toDouble();
-    QString shootingEffectiveness;
-    if (penetrationRatio > 85.0) {
-        shootingEffectiveness = "Відмінна реалізація пострілів";
-    } else if (penetrationRatio > 70.0) {
-        shootingEffectiveness = "Хороша реалізація пострілів";
-    } else {
-        shootingEffectiveness = "Потребує покращення (слабкі зони)";
-    }
-    analysis["shootingEffectiveness"] = shootingEffectiveness;
-
-    // 3. Аналіз командної взаємодії (на основі допомоги)
-    QVariantMap personalData = replayData.value("personal").toMap();
-    quint64 playerID = replayData.value("playerID").toULongLong();
-    double assistedDamage = 0;
-    for (auto it = personalData.constBegin(); it != personalData.constEnd(); ++it) {
-        if (it.key() == "avatar") continue;
-        QVariantMap vehicleStats = it.value().toMap();
-        if (vehicleStats.value("accountDBID").toULongLong() == playerID) {
-            assistedDamage += vehicleStats.value("damageAssistedRadio", 0).toDouble();
-            assistedDamage += vehicleStats.value("damageAssistedTrack", 0).toDouble();
-        }
+        rolePerformance += "нанесення шкоди.";
     }
 
-    QString teamPlay;
-    if (assistedDamage > 1000) {
-        teamPlay = "Активна допомога команді";
-    } else if (assistedDamage > 250) {
-        teamPlay = "Прийнятна допомога команді";
-    } else {
-        teamPlay = "Сконцентрований на нанесенні шкоди";
+    if (vehicleType.contains("heavy", Qt::CaseInsensitive) && blockedDamage > totalDamage * 0.7 && blockedDamage > 2000) {
+        rolePerformance += " Також відмінно використано броню.";
     }
-    analysis["teamPlay"] = teamPlay;
+    if ((vehicleType.contains("medium", Qt::CaseInsensitive) || vehicleType.contains("light", Qt::CaseInsensitive)) && assistedDamage > 1500) {
+        if (!rolePerformance.contains("допомога"))
+            rolePerformance += " Помітна допомога союзникам.";
+    }
+    analysis["rolePerformance"] = rolePerformance;
 
     return analysis;
 }

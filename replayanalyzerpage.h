@@ -35,6 +35,7 @@ private:
     void loadCachedReplays();
     void displayStructuredResults(const QVariantMap &data);
     void displayResults(const QString& results);
+    QString cleanVehicleName(const QString &technicalName);
 
     QPushButton *m_selectFileButton;
     QPushButton *m_clearReplaysButton;

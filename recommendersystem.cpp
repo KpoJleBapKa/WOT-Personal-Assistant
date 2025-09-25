@@ -6,25 +6,38 @@ QStringList RecommenderSystem::generate(const QVariantMap &metrics, const QVaria
 {
     QStringList recommendations;
 
-    double penetrationRatio = metrics.value("penetrationRatio").toString().remove("%").toDouble();
-    double accuracy = metrics.value("accuracy").toString().remove("%").toDouble();
-    QString gameStyle = analysis.value("gameStyle").toString();
+    // Отримуємо оцінку та інші дані
+    QString grade = analysis.value("performanceGrade").toString();
+    QString vehicleType = metrics.value("vehicleType").toString();
+    double blockedDamage = metrics.value("damageBlockedByArmor", 0.0).toDouble();
+    double assistedDamage = metrics.value("damageAssisted", 0.0).toDouble();
 
-    if (penetrationRatio < 70.0) {
-        recommendations.append("<b>Покращення пробиття:</b> Спробуйте краще вицілювати вразливі зони супротивників або використовуйте підкаліберні/кумулятивні снаряди для броньованих цілей.");
+
+    if (grade == "Еталонний" || grade == "Дуже хороший") {
+        recommendations.append("<b>Видатний результат!</b> Ваша гра в цьому бою була зразковою для техніки цього класу.");
+    }
+    else if (grade == "Хороший" || grade == "Непоганий") {
+        recommendations.append("<b>Хороший бій!</b> Ви зробили значний внесок у результат, продовжуйте в тому ж дусі.");
+    }
+    else if (grade == "Посередній") {
+        recommendations.append("<b>Стабільний результат.</b> Щоб досягти більшого, спробуйте аналізувати мінікарту для вибору більш вигідних позицій.");
+    }
+    else if (grade == "Нижче середнього" || grade == "Поганий") {
+        recommendations.append("<b>Є куди рости.</b> Спробуйте довше залишатися у бою та реалізовувати постріли. Не поспішайте виїжджати на відкриті позиції.");
+    }
+    else if (grade == "Жахливий") {
+        recommendations.append("<b>Невдалий бій.</b> Проаналізуйте, що пішло не так: можливо, це була помилка на старті або невдалий роз'їзд. Кожен такий бій — це досвід.");
     }
 
-    if (accuracy < 75.0) {
-        recommendations.append("<b>Підвищення точності:</b> Не стріляйте на ходу, якщо це не дозволяє стабілізація гармати. Повністю зводьтеся перед пострілом для максимальної точності.");
+
+    // Додаткові, більш конкретні поради
+    if (vehicleType.contains("heavy", Qt::CaseInsensitive) && blockedDamage < 1000 && (grade == "Поганий" || grade == "Нижче середнього")) {
+        recommendations.append("<b>Порада для важкого танка:</b> Схоже, вам не вдалося використати броню. Намагайтеся не підставляти вразливі зони та 'танкувати' від рельєфу або будівель.");
+    }
+    if (vehicleType.contains("light", Qt::CaseInsensitive) && assistedDamage < 1500 && (grade == "Поганий" || grade == "Нижче середнього")) {
+        recommendations.append("<b>Порада для легкого танка:</b> Основна ваша сила — в огляді та маскуванні. Вивчайте ключові позиції для розвідки, щоб приносити максимум користі, не отримуючи шкоди.");
     }
 
-    if (gameStyle == "Пасивний") {
-        recommendations.append("<b>Активність у бою:</b> Ваш внесок у бій був невисоким. Намагайтеся бути більш активним та реалізовувати потенціал вашої техніки, підтримуючи союзників на ключових напрямках.");
-    }
-
-    if (recommendations.isEmpty()) {
-        recommendations.append("Ви провели хороший бій! Продовжуйте в тому ж дусі.");
-    }
 
     return recommendations;
 }

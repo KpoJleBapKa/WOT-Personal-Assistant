@@ -24,6 +24,7 @@ SOURCES += \
     toptoolbar.cpp
 
 HEADERS += \
+    VehicleData.h \
     behavioranalyzer.h \
     blowfish_tables.h \
     databasemanager.h \

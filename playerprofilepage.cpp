@@ -1,7 +1,28 @@
+// playerprofilepage.cpp
 #include "playerprofilepage.h"
+
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QGridLayout>
+#include <QSplitter>
 #include <QLocale>
+#include <QHeaderView>
+#include <QPainter>
+#include <QChartView>
+#include <QPieSeries>
+#include <QPieSlice>
+#include <QChart>
+#include <QComboBox>
+#include <QLabel>
+#include <QFrame>
+#include <QGraphicsDropShadowEffect>
+#include <QTableWidgetItem>
+#include <QTextEdit>
+#include <QStyle>
+#include <QApplication>
+
+// Ensure Qt Charts module is added in your .pro/CMakeLists (QT += charts)
+
 
 PlayerProfilePage::PlayerProfilePage(DatabaseManager *dbManager, QWidget *parent)
     : QWidget(parent), m_dbManager(dbManager)
@@ -9,30 +30,133 @@ PlayerProfilePage::PlayerProfilePage(DatabaseManager *dbManager, QWidget *parent
     m_metricsCalculator = new MetricsCalculator(this);
     setupUI();
 
-    // Підключаємось до сигналу від бази даних
+    // Connect signals
     connect(m_dbManager, &DatabaseManager::dataChanged, this, &PlayerProfilePage::recalculateAndDisplay);
-    // Підключаємось до вибору гравця в ComboBox
     connect(m_playerSelector, &QComboBox::currentTextChanged, this, &PlayerProfilePage::onPlayerSelected);
 
-    // Первинний розрахунок при створенні сторінки
     recalculateAndDisplay();
 }
 
 void PlayerProfilePage::setupUI()
 {
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    // Global widget stylesheet + font preference
+    setStyleSheet(
+        "QWidget { background-color: #1e1e1e; color: #f0f0f0; font-family: 'Segoe UI', 'Roboto', sans-serif; }"
+        );
 
-    QHBoxLayout *selectorLayout = new QHBoxLayout();
-    selectorLayout->addWidget(new QLabel("Профіль гравця:"));
+    auto mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(30, 30, 30, 30);
+    mainLayout->setSpacing(20);
+
+    // --- Top Panel: Player Selection ---
+    auto selectorLayout = new QHBoxLayout();
+    auto profileLabel = new QLabel("<b>Профіль гравця:</b>");
+    profileLabel->setStyleSheet("font-size: 16px;");
+    selectorLayout->addWidget(profileLabel);
+
     m_playerSelector = new QComboBox(this);
+    m_playerSelector->setMinimumWidth(250);
+    m_playerSelector->setStyleSheet(
+        "QComboBox { background-color: #2e2e2e; color: #f0f0f0; padding: 6px 12px; border-radius: 6px; }"
+        "QComboBox::drop-down { border: none; }"
+        "QComboBox QAbstractItemView { background-color: #2e2e2e; selection-background-color: #55aaff; }"
+        );
     selectorLayout->addWidget(m_playerSelector);
     selectorLayout->addStretch();
     mainLayout->addLayout(selectorLayout);
 
-    m_profileDisplay = new QTextEdit(this);
-    m_profileDisplay->setReadOnly(true);
-    mainLayout->addWidget(m_profileDisplay);
+    // --- KPI Cards ---
+    auto gridLayout = new QGridLayout();
+    gridLayout->setSpacing(20);
+
+    auto createStatCard = [&](QLabel*& label, const QString& title) {
+        auto frame = new QFrame(this);
+        frame->setFrameShape(QFrame::StyledPanel);
+        frame->setStyleSheet(
+            "QFrame {"
+            " background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #2b2b2b, stop:1 #3f3f3f);"
+            " border-radius: 12px; padding: 12px;"
+            "}"
+            "QFrame:hover { background-color: #4a4a4a; }"
+            );
+
+        auto shadow = new QGraphicsDropShadowEffect(frame);
+        shadow->setBlurRadius(16);
+        shadow->setOffset(2, 2);
+        shadow->setColor(QColor(0, 0, 0, 160));
+        frame->setGraphicsEffect(shadow);
+
+        auto layout = new QVBoxLayout(frame);
+        layout->setContentsMargins(10, 10, 10, 10);
+        layout->setSpacing(4);
+
+        label = new QLabel("0", frame);
+        label->setAlignment(Qt::AlignCenter);
+        label->setStyleSheet("font-size: 34px; font-weight: bold; color: #55aaff;");
+        auto titleLabel = new QLabel(title, frame);
+        titleLabel->setAlignment(Qt::AlignCenter);
+        titleLabel->setStyleSheet("font-size: 13px; color: #bbbbbb;");
+        layout->addWidget(label);
+        layout->addWidget(titleLabel);
+        return frame;
+    };
+
+    gridLayout->addWidget(createStatCard(m_battlesLabel, "Проаналізовано боїв"), 0, 0);
+    gridLayout->addWidget(createStatCard(m_winRateLabel, "Відсоток перемог"), 0, 1);
+    gridLayout->addWidget(createStatCard(m_avgDamageLabel, "Середня шкода"), 0, 2);
+    mainLayout->addLayout(gridLayout);
+
+    // --- Detailed Statistics: Chart + Table (Splitter) ---
+    auto splitter = new QSplitter(Qt::Horizontal, this);
+    splitter->setStyleSheet("QSplitter::handle { background: #444; }");
+
+    // Left: Pie Chart
+    m_chartView = new QChartView(this);
+    m_chartView->setRenderHint(QPainter::Antialiasing);
+
+    // create chart explicitly
+    QChart *chart = new QChart();
+    chart->setBackgroundBrush(QBrush(QColor("#2e2e2e")));
+    chart->legend()->setLabelColor(Qt::white);
+    chart->setTitleBrush(QBrush(Qt::white));
+    chart->setAnimationOptions(QChart::AllAnimations);
+    m_chartView->setChart(chart);
+
+    splitter->addWidget(m_chartView);
+
+    // Right: Table
+    m_classStatsTable = new QTableWidget(this);
+    m_classStatsTable->setColumnCount(3);
+    m_classStatsTable->setHorizontalHeaderLabels({"Клас", "Боїв", "Середня шкода"});
+    m_classStatsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    m_classStatsTable->setAlternatingRowColors(true);
+    m_classStatsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_classStatsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_classStatsTable->setStyleSheet(
+        "QTableWidget { background-color: #2e2e2e; alternate-background-color: #252525; color: white; gridline-color: #444; }"
+        "QHeaderView::section { background-color: #3a3a3a; color: white; padding: 6px; }"
+        "QTableWidget::item { padding: 6px; }"
+        );
+
+    splitter->addWidget(m_classStatsTable);
+    splitter->setSizes({520, 420});
+    mainLayout->addWidget(splitter, 1);
+
+    // --- Analytical Conclusions ---
+    auto analysisLabel = new QLabel("<b>Аналітичні висновки:</b>");
+    analysisLabel->setStyleSheet("font-size: 16px; margin-top: 10px;");
+    mainLayout->addWidget(analysisLabel);
+
+    m_analysisText = new QTextEdit(this);
+    m_analysisText->setReadOnly(true);
+    m_analysisText->setMaximumHeight(180);
+    m_analysisText->setStyleSheet(
+        "QTextEdit { background-color: #2e2e2e; color: #e0e0e0; border: 1px solid #444; border-radius: 8px; padding: 10px; }"
+        );
+    mainLayout->addWidget(m_analysisText);
 }
+
+// ---------------------- Data processing & display -----------------------
 
 void PlayerProfilePage::recalculateAndDisplay()
 {
@@ -40,109 +164,186 @@ void PlayerProfilePage::recalculateAndDisplay()
     QVariantList replays = m_dbManager->getReplays();
 
     for (const QVariant& replayVar : replays) {
-        QVariantMap replayData = replayVar.toMap().value("analysisData").toMap();
+        QVariantMap replayMap = replayVar.toMap();
+        QVariantMap replayData = replayMap.value("analysisData").toMap();
         if (replayData.isEmpty()) continue;
 
         QString playerName = replayData.value("playerName").toString();
         if (playerName.isEmpty()) continue;
 
-        PlayerProfile& profile = m_profiles[playerName];
+        PlayerProfile &profile = m_profiles[playerName];
         profile.playerName = playerName;
         profile.battleCount++;
 
         QVariantMap metrics = m_metricsCalculator->calculate(replayData);
-        profile.totalDamage += metrics.value("totalDamageDealt").toDouble();
-        profile.totalAssisted += metrics.value("damageAssisted").toDouble();
-        profile.totalBlocked += metrics.value("damageBlockedByArmor").toDouble();
-        profile.totalKills += metrics.value("kills").toDouble();
+        double damage = metrics.value("totalDamageDealt").toDouble();
+        double assisted = metrics.value("damageAssisted").toDouble();
+        double blocked = metrics.value("damageBlockedByArmor").toDouble();
+        double kills = metrics.value("kills").toDouble();
+
+        profile.totalDamage += damage;
+        profile.totalAssisted += assisted;
+        profile.totalBlocked += blocked;
+        profile.totalKills += kills;
+
+        if (damage > profile.maxDamage) profile.maxDamage = damage;
+        if (kills > profile.maxKills) profile.maxKills = kills;
+        if (assisted > profile.maxAssisted) profile.maxAssisted = assisted;
+        if (blocked > profile.maxBlocked) profile.maxBlocked = blocked;
+
+        int playerTeam = 0;
+        if (replayData.contains("vehicles")) {
+            QVariantMap vehicles = replayData.value("vehicles").toMap();
+            for (auto it = vehicles.constBegin(); it != vehicles.constEnd(); ++it) {
+                QVariantMap v = it.value().toMap();
+                if (v.value("name").toString() == playerName) {
+                    playerTeam = v.value("team").toInt();
+                    break;
+                }
+            }
+        }
+        if (replayData.contains("winnerTeam") && replayData.value("winnerTeam").toInt() == playerTeam && playerTeam != 0) {
+            profile.wins++;
+        }
 
         QString vehicleType = metrics.value("vehicleType").toString();
+        if (vehicleType.isEmpty()) vehicleType = "unknown";
         if (vehicleType != "unknown") {
-            profile.battlesByVehicleType[vehicleType]++;
-            profile.damageByVehicleType[vehicleType] += metrics.value("totalDamageDealt").toDouble();
+            profile.battlesByVehicleType[vehicleType] += 1;
+            profile.damageByVehicleType[vehicleType] += damage;
         }
     }
 
-    // Оновлюємо список гравців у ComboBox
     QString currentPlayer = m_playerSelector->currentText();
     m_playerSelector->clear();
     m_playerSelector->addItems(m_profiles.keys());
 
     int currentIndex = m_playerSelector->findText(currentPlayer);
-    if (currentIndex != -1) {
-        m_playerSelector->setCurrentIndex(currentIndex);
-    }
+    if (currentIndex != -1) m_playerSelector->setCurrentIndex(currentIndex);
 
-    // Відображаємо профіль поточного або першого гравця
     onPlayerSelected(m_playerSelector->currentText());
 }
 
 void PlayerProfilePage::onPlayerSelected(const QString &playerName)
 {
-    if (playerName.isEmpty()) {
-        m_profileDisplay->setHtml("<p>Немає даних для відображення. Завантажте та проаналізуйте реплеї.</p>");
+    if (playerName.isEmpty() || !m_profiles.contains(playerName)) {
+        m_battlesLabel->setText("0");
+        m_winRateLabel->setText("0%");
+        m_avgDamageLabel->setText("0");
+        m_classStatsTable->setRowCount(0);
+        if (m_chartView->chart()) m_chartView->chart()->removeAllSeries();
+        m_analysisText->setHtml("<p>Немає даних для відображення. Завантажте та проаналізуйте реплеї.</p>");
         return;
     }
 
-    if (m_profiles.contains(playerName)) {
-        generateProfileReport(m_profiles.value(playerName));
-    }
+    displayProfile(m_profiles.value(playerName));
 }
 
 void PlayerProfilePage::refreshProfile()
 {
-    // Цей слот можна викликати, щоб примусово оновити дані, наприклад, при переході на вкладку
     recalculateAndDisplay();
 }
 
-void PlayerProfilePage::generateProfileReport(const PlayerProfile &profile)
+void PlayerProfilePage::displayProfile(const PlayerProfile &profile)
 {
     QLocale locale(QLocale::English);
-    QString report;
-    report += QString("<h1>Карта танкіста: %1</h1>").arg(profile.playerName);
 
-    // --- ЗАГАЛЬНА СТАТИСТИКА ---
-    report += "<h2>Загальна статистика</h2>";
-    report += QString("<p><b>Проаналізовано боїв:</b> %1</p>").arg(profile.battleCount);
-    report += QString("<p><b>Середня шкода за бій:</b> %1</p>").arg(locale.toString(qRound(profile.avgDamage())));
-    double avgAssisted = profile.battleCount > 0 ? profile.totalAssisted / profile.battleCount : 0;
+    // KPI
+    m_battlesLabel->setText(QString::number(profile.battleCount));
+    m_winRateLabel->setText(QString::number(profile.winRate(), 'f', 2) + "%");
+    m_avgDamageLabel->setText(locale.toString(qRound(profile.avgDamage())));
+
+    // Table
+    m_classStatsTable->setRowCount(0);
+    for (auto it = profile.battlesByVehicleType.constBegin(); it != profile.battlesByVehicleType.constEnd(); ++it) {
+        int row = m_classStatsTable->rowCount();
+        m_classStatsTable->insertRow(row);
+        double avgDmg = it.value() > 0 ? profile.damageByVehicleType.value(it.key()) / it.value() : 0;
+
+        auto itemClass = new QTableWidgetItem(it.key());
+        auto itemBattles = new QTableWidgetItem(QString::number(it.value()));
+        auto itemAvg = new QTableWidgetItem(locale.toString(qRound(avgDmg)));
+
+        // Center numeric columns
+        itemBattles->setTextAlignment(Qt::AlignCenter);
+        itemAvg->setTextAlignment(Qt::AlignCenter);
+
+        m_classStatsTable->setItem(row, 0, itemClass);
+        m_classStatsTable->setItem(row, 1, itemBattles);
+        m_classStatsTable->setItem(row, 2, itemAvg);
+    }
+
+    // Pie chart - build series
+    if (!m_chartView->chart()) {
+        m_chartView->setChart(new QChart());
+    }
+    QChart *chart = m_chartView->chart();
+    chart->removeAllSeries();
+
+    QPieSeries *series = new QPieSeries();
+    series->setLabelsVisible(true);
+    series->setPieSize(0.7);
+
+    for (auto it = profile.battlesByVehicleType.constBegin(); it != profile.battlesByVehicleType.constEnd(); ++it) {
+        series->append(it.key(), it.value());
+    }
+
+    // Colors palette (will cycle)
+    QStringList colors = {"#55aaff", "#ffaa55", "#55ffaa", "#ff5555", "#aa55ff", "#ffd155", "#55d6ff"};
+    int i = 0;
+    for (QPieSlice *slice : series->slices()) {
+        slice->setBrush(QColor(colors[i % colors.size()]));
+        slice->setLabelColor(Qt::white);
+        slice->setLabelPosition(QPieSlice::LabelInsideHorizontal);
+        slice->setPen(QPen(QColor(40,40,40))); // subtle outline
+        ++i;
+    }
+
+    chart->addSeries(series);
+    chart->setTitle("Розподіл боїв за класами");
+    chart->setTitleBrush(QBrush(Qt::white));
+    chart->legend()->setVisible(true);
+    chart->legend()->setAlignment(Qt::AlignBottom);
+
+    // Analysis text generation
+    QString analysisReport;
+    QString bestClass = "Не визначено";
+    double maxAvgDmg = 0;
+    for (auto it = profile.battlesByVehicleType.constBegin(); it != profile.battlesByVehicleType.constEnd(); ++it) {
+        double avgDmg = it.value() > 0 ? profile.damageByVehicleType.value(it.key()) / it.value() : 0;
+        if (avgDmg > maxAvgDmg) {
+            maxAvgDmg = avgDmg;
+            bestClass = it.key();
+        }
+    }
+
+    analysisReport += "<ul style='margin:0px 0px 8px 16px;'>";
+    if (bestClass != "Не визначено") {
+        analysisReport += QString("<li><b>Найефективніший клас:</b> %1 (середня шкода %2).</li>")
+                              .arg(bestClass)
+                              .arg(locale.toString(qRound(maxAvgDmg)));
+    } else {
+        analysisReport += "<li>Немає достатньо даних для визначення найефективнішого класу.</li>";
+    }
+
+    if (profile.winRate() > 55) {
+        analysisReport += "<li>🏆 <b>Сильна сторона:</b> Високий відсоток перемог свідчить про розуміння гри та вміння впливати на результат бою.</li>";
+    } else if (profile.winRate() < 40 && profile.battleCount > 10) {
+        analysisReport += "<li>🔍 <b>Рекомендація:</b> Потрібно проаналізувати позиційні помилки або вибір техніки.</li>";
+    }
+
     double avgBlocked = profile.battleCount > 0 ? profile.totalBlocked / profile.battleCount : 0;
-    double avgKills = profile.battleCount > 0 ? profile.totalKills / profile.battleCount : 0;
-    report += QString("<p><b>Середня допомога за бій:</b> %1</p>").arg(locale.toString(qRound(avgAssisted)));
-    report += QString("<p><b>Середній заблокований збиток:</b> %1</p>").arg(locale.toString(qRound(avgBlocked)));
-    report += QString("<p><b>Середня кількість знищених:</b> %1</p>").arg(QString::number(avgKills, 'f', 2));
-
-    // --- СТАТИСТИКА ЗА ТИПАМИ ТЕХНІКИ ---
-    report += "<h2>Ефективність за класами техніки</h2>";
-    report += "<table border='1' style='width:100%; border-collapse: collapse;'><tr><th>Клас</th><th>Боїв</th><th>Середня шкода</th></tr>";
-    for(auto it = profile.battlesByVehicleType.constBegin(); it != profile.battlesByVehicleType.constEnd(); ++it) {
-        QString type = it.key();
-        int battles = it.value();
-        double avgDmg = (battles > 0) ? profile.damageByVehicleType.value(type) / battles : 0;
-        report += QString("<tr><td style='padding: 5px;'>%1</td><td style='padding: 5px;'>%2</td><td style='padding: 5px;'>%3</td></tr>")
-                      .arg(type).arg(battles).arg(locale.toString(qRound(avgDmg)));
-    }
-    report += "</table>";
-
-    // --- СИЛЬНІ ТА СЛАБКІ СТОРОНИ ---
-    report += "<h2>Аналіз стилю гри</h2><ul>";
     if (avgBlocked > 1500 && profile.battlesByVehicleType.contains("heavyTank")) {
-        report += "<li><b>Сильна сторона:</b> Ви впевнено використовуєте броню на важких танках.</li>";
+        analysisReport += "<li>🛡️ <b>Сильна сторона:</b> Впевнене використання броні на важких танках.</li>";
     }
-    if (avgAssisted > 1500 && (profile.battlesByVehicleType.contains("lightTank") || profile.battlesByVehicleType.contains("mediumTank"))) {
-        report += "<li><b>Сильна сторона:</b> Ефективна гра від розвідки та підтримки союзників.</li>";
-    }
-    if (profile.avgDamage() > 2500) {
-        report += "<li><b>Сильна сторона:</b> Висока реалізація шкоди.</li>";
-    }
+    analysisReport += "</ul>";
 
-    if (avgAssisted < 500 && profile.battlesByVehicleType.value("lightTank", 0) > 3) {
-        report += "<li><b>Точка росту:</b> На легких танках варто приділяти більше уваги розвідці.</li>";
-    }
-    if (avgBlocked < 500 && profile.battlesByVehicleType.value("heavyTank", 0) > 3) {
-        report += "<li><b>Точка росту:</b> Броня важких танків використовується недостатньо. Спробуйте грати агресивніше на першій лінії.</li>";
-    }
-    report += "</ul>";
+    analysisReport += "<b>Рекордні показники:</b><ul style='margin:4px 0px 0px 16px;'>";
+    analysisReport += QString("<li>🏅 Максимум шкоди за бій: <b>%1</b></li>").arg(locale.toString(qRound(profile.maxDamage)));
+    analysisReport += QString("<li>💥 Максимум знищених: <b>%1</b></li>").arg(qRound(profile.maxKills));
+    analysisReport += QString("<li>🤝 Максимум допомоги: <b>%1</b></li>").arg(locale.toString(qRound(profile.maxAssisted)));
+    analysisReport += QString("<li>🛡️ Максимум заблоковано: <b>%1</b></li>").arg(locale.toString(qRound(profile.maxBlocked)));
+    analysisReport += "</ul>";
 
-    m_profileDisplay->setHtml(report);
+    m_analysisText->setHtml(analysisReport);
 }

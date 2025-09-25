@@ -1,10 +1,5 @@
+// replayanalyzerpage.cpp
 #include "replayanalyzerpage.h"
-#include "recommendersystem.h"
-#include "behavioranalyzer.h"
-#include "metricscalculator.h"
-#include "replayparser.h"
-#include "databasemanager.h"
-#include "VehicleData.h" // Підключаємо для доступу до бази даних
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -18,119 +13,212 @@
 #include <QListWidget>
 #include <QTextEdit>
 #include <QFutureWatcher>
-#include <QRegularExpression>
-#include <QRegularExpressionMatch>
 #include <QLabel>
+#include <QGraphicsDropShadowEffect>
+#include <QSpacerItem>
+#include <QScrollBar>
+#include <QTimer>
+#include <QPrinter>
+#include <QTextDocument>
+#include <QRandomGenerator>
+#include <QDir>
+#include <QMetaObject>
 
 ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *parent)
     : QWidget(parent), m_dbManager(dbManager)
 {
-    // Створення основного layout
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(10, 10, 10, 10);
-    mainLayout->setSpacing(10);
+    // Dark theme and global stylesheet
+    setStyleSheet(R"(
+        QWidget { background-color: #171717; color: #e6eef6; font-family: 'Segoe UI', 'Roboto', sans-serif; font-size: 13px; }
+        QLabel { color: #dfe8f8; }
+        QPushButton {
+            background-color: #252525; color: #e6eef6; border: 1px solid #333;
+            border-radius: 8px; padding: 8px 14px; min-height: 34px;
+        }
+        QPushButton:hover { background-color: #313131; }
+        QPushButton:disabled { background-color: #1a1a1a; color: #777; }
+        QPushButton#danger {
+            background-color: #4b1f1f; border: 1px solid #662222;
+        }
+        QPushButton#danger:hover { background-color: #632727; }
+        QProgressBar {
+            background-color: #222; color: #e6eef6; border-radius: 6px; height: 18px; text-align: center;
+        }
+        QProgressBar::chunk { background-color: #4fa8ff; border-radius: 6px; }
+        QListWidget {
+            background-color: #1f1f1f; border: 1px solid #303030; border-radius: 8px;
+            padding: 6px;
+        }
+        QListWidget::item { padding: 8px; margin: 2px 0; }
+        QListWidget::item:selected { background-color: #3a7bd5; color: white; }
+        QTextEdit { background-color: #161616; border: 1px solid #2f2f2f; border-radius: 8px; padding: 10px; color: #e6eef6; }
+        QScrollBar:vertical { background: #1b1b1b; width: 10px; }
+    )");
 
-    // Верхня панель з кнопками
-    QHBoxLayout *topLayout = new QHBoxLayout();
-    m_selectFileButton = new QPushButton("Вибрати реплей...", this);
+    auto *mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(20, 20, 20, 20);
+    mainLayout->setSpacing(14);
+
+    // Top controls
+    auto *topLayout = new QHBoxLayout();
+    topLayout->setSpacing(10);
+
+    m_selectFileButton = new QPushButton("📁 Вибрати реплей...", this);
     m_selectFileButton->setCursor(Qt::PointingHandCursor);
 
-    m_clearReplaysButton = new QPushButton("Очистити список", this);
+    m_clearReplaysButton = new QPushButton("🧹 Очистити список", this);
     m_clearReplaysButton->setCursor(Qt::PointingHandCursor);
+    m_clearReplaysButton->setObjectName("danger");
+
+    m_deleteSelectedButton = new QPushButton("🗑️ Видалити вибраний", this);
+    m_deleteSelectedButton->setCursor(Qt::PointingHandCursor);
+
+    m_exportPdfButton = new QPushButton("📤 Експортувати як PDF", this);
+    m_exportPdfButton->setCursor(Qt::PointingHandCursor);
 
     topLayout->addWidget(m_selectFileButton);
     topLayout->addWidget(m_clearReplaysButton);
+    topLayout->addWidget(m_deleteSelectedButton);
+    topLayout->addWidget(m_exportPdfButton);
     topLayout->addStretch();
 
-    // Індикатор прогресу
+    auto *hintLabel = new QLabel("<i>Підтримуються файли: <b>.wotreplay</b></i>");
+    hintLabel->setStyleSheet("color:#9fb5df; font-size:12px;");
+    topLayout->addWidget(hintLabel, 0, Qt::AlignRight);
+
+    mainLayout->addLayout(topLayout);
+
+    // Progress bar
     m_progressBar = new QProgressBar(this);
     m_progressBar->setRange(0, 100);
     m_progressBar->setValue(0);
     m_progressBar->setAlignment(Qt::AlignCenter);
-    m_progressBar->setTextVisible(false);
+    m_progressBar->setTextVisible(true);
+    m_progressBar->setFormat("");
+    mainLayout->addWidget(m_progressBar);
 
-    // Головний layout з двома панелями
-    QHBoxLayout *contentLayout = new QHBoxLayout();
+    // Content: left list + right results
+    auto *contentLayout = new QHBoxLayout();
+    contentLayout->setSpacing(18);
 
-    // Ліва панель: список реплеїв
-    QVBoxLayout *leftLayout = new QVBoxLayout();
+    // Left - replay list
+    auto *leftLayout = new QVBoxLayout();
+    leftLayout->setSpacing(8);
+
+    auto *listTitle = new QLabel("📂 Список реплеїв:");
+    listTitle->setStyleSheet("font-weight:600; font-size:15px;");
+    leftLayout->addWidget(listTitle);
+
     m_replayList = new QListWidget(this);
-    leftLayout->addWidget(new QLabel("Список реплеїв:"));
+    m_replayList->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_replayList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_replayList->setMinimumWidth(280);
+    m_replayList->setMaximumWidth(360);
+
+    auto *listShadow = new QGraphicsDropShadowEffect(this);
+    listShadow->setBlurRadius(8);
+    listShadow->setOffset(0, 2);
+    listShadow->setColor(QColor(0, 0, 0, 160));
+    m_replayList->setGraphicsEffect(listShadow);
+
     leftLayout->addWidget(m_replayList);
 
-    QWidget *leftWidget = new QWidget;
-    leftWidget->setLayout(leftLayout);
-    leftWidget->setMaximumWidth(300);
+    auto *listBtnsLayout = new QHBoxLayout();
+    listBtnsLayout->setSpacing(8);
+    listBtnsLayout->addStretch();
+    leftLayout->addLayout(listBtnsLayout);
 
-    // Права панель: результати аналізу
-    QVBoxLayout *rightLayout = new QVBoxLayout();
+    auto *leftWidget = new QWidget(this);
+    leftWidget->setLayout(leftLayout);
+    contentLayout->addWidget(leftWidget);
+
+    // Right - results
+    auto *rightLayout = new QVBoxLayout();
+    rightLayout->setSpacing(10);
+
+    auto *resultsTitle = new QLabel("📊 Результати аналізу:");
+    resultsTitle->setStyleSheet("font-weight:600; font-size:15px;");
+    rightLayout->addWidget(resultsTitle);
+
     m_resultsTextEdit = new QTextEdit(this);
     m_resultsTextEdit->setReadOnly(true);
     m_resultsTextEdit->setPlainText("Виберіть реплей зі списку або завантажте новий, щоб побачити результати аналізу.");
-    rightLayout->addWidget(new QLabel("Результати аналізу:"));
+    m_resultsTextEdit->verticalScrollBar()->setSingleStep(20);
+
+    auto *resultsShadow = new QGraphicsDropShadowEffect(this);
+    resultsShadow->setBlurRadius(10);
+    resultsShadow->setOffset(0, 3);
+    resultsShadow->setColor(QColor(0,0,0,160));
+    m_resultsTextEdit->setGraphicsEffect(resultsShadow);
+
     rightLayout->addWidget(m_resultsTextEdit);
 
-    QWidget *rightWidget = new QWidget;
+    auto *rightWidget = new QWidget(this);
     rightWidget->setLayout(rightLayout);
+    contentLayout->addWidget(rightWidget, 1);
 
-    contentLayout->addWidget(leftWidget);
-    contentLayout->addWidget(rightWidget);
-
-    // Додаємо всі елементи в основний layout
-    mainLayout->addLayout(topLayout);
-    mainLayout->addWidget(m_progressBar);
     mainLayout->addLayout(contentLayout);
 
-    // Ініціалізація аналітичних модулів
+    // Init modules
     m_replayParser = new ReplayParser(this);
     m_metricsCalculator = new MetricsCalculator(this);
     m_behaviorAnalyzer = new BehaviorAnalyzer(this);
     m_recommenderSystem = new RecommenderSystem(this);
 
-    // З'єднання сигналів та слотів
+    // Connections
     connect(m_selectFileButton, &QPushButton::clicked, this, &ReplayAnalyzerPage::onSelectFileButtonClicked);
     connect(m_replayList, &QListWidget::itemClicked, this, &ReplayAnalyzerPage::onReplayListItemClicked);
     connect(&m_watcher, &QFutureWatcher<QVariantMap>::finished, this, &ReplayAnalyzerPage::handleAnalysisFinished);
     connect(m_clearReplaysButton, &QPushButton::clicked, this, &ReplayAnalyzerPage::onClearReplaysButtonClicked);
+    connect(m_deleteSelectedButton, &QPushButton::clicked, this, &ReplayAnalyzerPage::onDeleteSelectedClicked);
+    connect(m_exportPdfButton, &QPushButton::clicked, this, &ReplayAnalyzerPage::onExportPdfClicked);
 
+    // Load cached
     loadCachedReplays();
 }
 
 ReplayAnalyzerPage::~ReplayAnalyzerPage() {}
 
+// -------------------- UI / interaction methods --------------------
+
 void ReplayAnalyzerPage::onSelectFileButtonClicked() {
     QString filePath = QFileDialog::getOpenFileName(this, "Вибрати реплей", "", "World of Tanks Replays (*.wotreplay)");
-    if (!filePath.isEmpty()) {
-        QFileInfo fileInfo(filePath);
-        for (int i = 0; i < m_replayList->count(); ++i) {
-            if (m_replayList->item(i)->data(Qt::UserRole).toString() == filePath) {
-                QMessageBox::information(this, "Файл вже додано", "Цей реплей вже є у списку.");
-                return;
-            }
+    if (filePath.isEmpty()) return;
+
+    QFileInfo fileInfo(filePath);
+
+    for (int i = 0; i < m_replayList->count(); ++i) {
+        if (m_replayList->item(i)->data(Qt::UserRole).toString() == filePath) {
+            QMessageBox::information(this, "Файл вже додано", "Цей реплей вже є у списку.");
+            return;
         }
-        QListWidgetItem *item = new QListWidgetItem(fileInfo.fileName());
-        item->setData(Qt::UserRole, filePath);
-        m_replayList->addItem(item);
-        m_replayList->setCurrentItem(item);
-        analyzeReplay(filePath);
     }
+
+    QListWidgetItem *item = new QListWidgetItem(QStringLiteral("🎮 %1").arg(fileInfo.fileName()));
+    item->setData(Qt::UserRole, filePath);
+    m_replayList->addItem(item);
+    m_replayList->setCurrentItem(item);
+
+    analyzeReplay(filePath);
 }
 
 void ReplayAnalyzerPage::onReplayListItemClicked(QListWidgetItem *item) {
-    if (item && !item->data(Qt::UserRole).toString().isEmpty()) {
-        analyzeReplay(item->data(Qt::UserRole).toString());
-    }
+    if (!item) return;
+    QString path = item->data(Qt::UserRole).toString();
+    if (!path.isEmpty()) analyzeReplay(path);
 }
 
 void ReplayAnalyzerPage::loadCachedReplays() {
     m_replayList->clear();
+
+    if (!m_dbManager) return;
     QVariantList cachedReplays = m_dbManager->getReplays();
-    for (const QVariant& replayData : cachedReplays) {
+    for (const QVariant &replayData : cachedReplays) {
         QVariantMap replayMap = replayData.toMap();
         QString filePath = replayMap.value("filePath").toString();
         QFileInfo fileInfo(filePath);
         if (fileInfo.exists()) {
-            QListWidgetItem* item = new QListWidgetItem(fileInfo.fileName());
+            QListWidgetItem* item = new QListWidgetItem(QStringLiteral("🎮 %1").arg(fileInfo.fileName()));
             item->setData(Qt::UserRole, filePath);
             m_replayList->addItem(item);
         }
@@ -138,18 +226,43 @@ void ReplayAnalyzerPage::loadCachedReplays() {
 }
 
 void ReplayAnalyzerPage::analyzeReplay(const QString &filePath) {
-    QVariantMap cachedData = m_dbManager->getReplayData(filePath);
-    if (!cachedData.isEmpty()) {
-        displayStructuredResults(cachedData);
-        return;
+    if (filePath.isEmpty()) return;
+
+    if (m_dbManager) {
+        QVariantMap cachedData = m_dbManager->getReplayData(filePath);
+        if (!cachedData.isEmpty()) {
+            displayStructuredResults(cachedData);
+            return;
+        }
     }
 
+    // UX lock
     m_progressBar->setValue(0);
-    m_progressBar->setTextVisible(true);
-    m_progressBar->setFormat("Аналіз файлу...");
+    m_progressBar->setFormat("📊 Аналіз файлу...");
     m_selectFileButton->setEnabled(false);
+    m_clearReplaysButton->setEnabled(false);
+    m_deleteSelectedButton->setEnabled(false);
+    m_exportPdfButton->setEnabled(false);
     m_replayList->setEnabled(false);
-    m_resultsTextEdit->setPlainText("Початок аналізу файлу: " + QFileInfo(filePath).fileName());
+
+    m_resultsTextEdit->setPlainText(QString("Початок аналізу файлу: %1").arg(QFileInfo(filePath).fileName()));
+
+    // Simulate progress while parser runs
+    if (auto existing = findChild<QTimer*>("replayProgressTimer")) {
+        existing->stop();
+        existing->deleteLater();
+    }
+    QTimer *progressTimer = new QTimer(this);
+    progressTimer->setObjectName("replayProgressTimer");
+    progressTimer->setInterval(140);
+    connect(progressTimer, &QTimer::timeout, this, [this]() {
+        int v = m_progressBar->value();
+        if (v < 90) {
+            int step = QRandomGenerator::global()->bounded(3, 11); // 3..10
+            m_progressBar->setValue(qMin(90, v + step));
+        }
+    });
+    progressTimer->start();
 
     QFuture<QVariantMap> future = QtConcurrent::run([this, filePath]() {
         return m_replayParser->parse(filePath);
@@ -158,18 +271,30 @@ void ReplayAnalyzerPage::analyzeReplay(const QString &filePath) {
 }
 
 void ReplayAnalyzerPage::handleAnalysisFinished() {
+    // finalize progress
     m_progressBar->setValue(100);
-    m_progressBar->setFormat("Аналіз завершено");
+    m_progressBar->setFormat("✅ Аналіз завершено");
+
+    if (auto timer = findChild<QTimer*>("replayProgressTimer")) {
+        timer->stop();
+        timer->deleteLater();
+    }
+
     m_selectFileButton->setEnabled(true);
+    m_clearReplaysButton->setEnabled(true);
+    m_deleteSelectedButton->setEnabled(true);
+    m_exportPdfButton->setEnabled(true);
     m_replayList->setEnabled(true);
 
     QVariantMap analysisResults = m_watcher.result();
 
     if (analysisResults.isEmpty() || !analysisResults.contains("personal")) {
         QMessageBox::critical(this, "Помилка", "Не вдалося розібрати файл реплею. Можливо, файл пошкоджено або має непідтримуваний формат.");
-        m_resultsTextEdit->setPlainText("Помилка при аналізі файлу.");
+        m_resultsTextEdit->setPlainText("❌ Помилка при аналізі файлу.");
+
         for (int i = 0; i < m_replayList->count(); ++i) {
-            if (m_replayList->item(i) && m_watcher.future().result().value("filePath").toString() == m_replayList->item(i)->data(Qt::UserRole).toString()) {
+            auto *it = m_replayList->item(i);
+            if (it && m_watcher.future().result().value("filePath").toString() == it->data(Qt::UserRole).toString()) {
                 delete m_replayList->takeItem(i);
                 break;
             }
@@ -178,33 +303,40 @@ void ReplayAnalyzerPage::handleAnalysisFinished() {
     }
 
     QString filePath = analysisResults.value("filePath").toString();
-    m_dbManager->addReplayData(filePath, analysisResults);
+    if (m_dbManager) m_dbManager->addReplayData(filePath, analysisResults);
+
     displayStructuredResults(analysisResults);
 }
 
 void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
 {
-    QString report = "<h1>Звіт про аналіз реплею</h1>";
-
-    // Спочатку розраховуємо всі метрики, щоб отримати доступ до чистої назви танка
     QVariantMap metrics = m_metricsCalculator->calculate(data);
     QVariantMap behavior = m_behaviorAnalyzer->analyze(data, metrics);
-    // ❗️ ВИПРАВЛЕНО: Додано третій аргумент 'data'
     QStringList recommendations = m_recommenderSystem->generate(data, metrics, behavior);
 
+    QString report;
+    report += "<div style='font-family:Segoe UI, Roboto, sans-serif; color:#e6eef6;'>";
 
-    // --- Базова інформація ---
-    report += "<h2>Базова інформація</h2>";
-    report += "<ul>";
+    // Заголовок
+    report += "<div style='display:flex; align-items:center; gap:12px;'>"
+              "<h1 style='margin:0; font-size:20px;'>📄 Звіт про аналіз реплею</h1>"
+              "</div>";
+
+    report += "<div style='margin-top:10px; padding:12px; background:#141414; border:1px solid #2b2b2b; border-radius:8px;'>";
+
+    // Базова інформація
+    report += "<h2 style='margin:6px 0 8px 0; font-size:16px; color:#9fc4ff;'>Базова інформація</h2>";
+    report += "<ul style='margin:0 0 8px 18px;'>";
 
     QString playerName = data.value("playerName").toString();
     QString mapName = data.value("mapDisplayName").toString();
-    QString cleanName = metrics.value("cleanVehicleName").toString(); // Беремо назву з метрик
+    QString cleanName = metrics.value("cleanVehicleName").toString();
 
-    report += "<li><b>Гравець:</b> " + (playerName.isEmpty() ? "Невідомо" : playerName) + "</li>";
-    report += "<li><b>Мапа:</b> " + (mapName.isEmpty() ? "Невідомо" : mapName) + "</li>";
-    report += "<li><b>Техніка:</b> " + (cleanName.isEmpty() ? data.value("playerVehicle").toString() : cleanName) + "</li>";
+    report += QString("<li><b>Гравець:</b> %1</li>").arg(playerName.isEmpty() ? "Невідомо" : playerName);
+    report += QString("<li><b>Мапа:</b> %1</li>").arg(mapName.isEmpty() ? "Невідомо" : mapName);
+    report += QString("<li><b>Техніка:</b> %1</li>").arg(cleanName.isEmpty() ? data.value("playerVehicle").toString() : cleanName);
 
+    // Результат бою
     int playerTeam = 0;
     if (data.contains("vehicles")) {
         QVariantMap vehiclesData = data.value("vehicles").toMap();
@@ -216,94 +348,176 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
             }
         }
     }
-
     if (data.contains("winnerTeam") && playerTeam != 0) {
         int winnerTeam = data.value("winnerTeam").toInt();
         QString outcome = "Нічия";
-        if (winnerTeam == playerTeam) {
-            outcome = "<span style='color: #88ff88;'>Перемога</span>";
-        } else if (winnerTeam != 0) {
-            outcome = "<span style='color: #ff8888;'>Поразка</span>";
-        }
-        report += "<li><b>Результат бою:</b> " + outcome + "</li>";
+        if (winnerTeam == playerTeam)
+            outcome = "<span style='color:#88ff88; font-weight:600;'>Перемога</span>";
+        else if (winnerTeam != 0)
+            outcome = "<span style='color:#ff8888; font-weight:600;'>Поразка</span>";
+        report += QString("<li><b>Результат бою:</b> %1</li>").arg(outcome);
     } else {
         report += "<li><b>Інформація про результат бою відсутня.</b></li>";
     }
     report += "</ul>";
 
-    // --- Результати гравця ---
-    report += "<h2>Результати гравця: " + (playerName.isEmpty() ? "Невідомо" : playerName) + "</h2>";
-    report += "<ul>";
 
-    double totalDamage = metrics.value("totalDamageDealt", 0.0).toDouble();
-    double shots = metrics.value("shots", 0.0).toDouble();
-    double hits = metrics.value("hits", 0.0).toDouble();
-    double piercings = metrics.value("piercings", 0.0).toDouble();
-    report += QString("<li><b>Нанесено шкоди:</b> %1</li>").arg(qRound(totalDamage));
-    report += QString("<li><b>Допомога команді:</b> %1</li>").arg(qRound(metrics.value("damageAssisted", 0.0).toDouble()));
-    report += QString("<li><b>Заблоковано шкоди:</b> %1</li>").arg(qRound(metrics.value("damageBlockedByArmor", 0.0).toDouble()));
-    report += QString("<li><b>Знищено:</b> %1</li>").arg(qRound(metrics.value("kills", 0.0).toDouble()));
-    report += QString("<li><b>Виявлено ворогів:</b> %1</li>").arg(qRound(metrics.value("spotted", 0.0).toDouble()));
-    report += QString("<li><b>Постріли / Влучання / Пробиття:</b> %1 / %2 / %3</li>").arg(qRound(shots)).arg(qRound(hits)).arg(qRound(piercings));
-    report += QString("<li><b>Досвід:</b> %1</li>").arg(qRound(metrics.value("xp", 0.0).toDouble()));
-    report += QString("<li><b>Кредити:</b> %1</li>").arg(qRound(metrics.value("credits", 0.0).toDouble()));
-    report += "</ul>";
+    // 🟦 Результати гравця — назви та значення розділено на окремі блоки
+    report += "<h2 style='margin: 16px 0 12px 0; font-size: 18px; color: #9fc4ff;'>Результати гравця</h2>";
+    report += "<div style='display: flex; flex-direction: column; gap: 36px; align-items: flex-start;'>";
 
-    // --- Ключові метрики ефективності ---
-    report += "<h2>Ключові метрики ефективності</h2>";
+    auto appendMetricSeparated = [&](const QString &label, const QString &value, const QString &color = "#ffffff") {
+        // 🏷️ Назва — окремий блок
+        report += QString(
+                      "<div style='font-size: 17px; font-weight: 600; color: #cfd9ff; "
+                      "background: #181818; padding: 8px 14px; border-radius: 8px; "
+                      "display: inline-block; box-shadow: 0 0 6px rgba(0,0,0,0.5);'>%1:</div>"
+                      ).arg(label);
+
+        // 🔢 Значення — окремий блок нижче
+        report += QString(
+                      "<div style='font-size: 40px; font-weight: 800; color: %1; "
+                      "background: #0f0f0f; padding: 14px 28px; border-radius: 12px; "
+                      "margin-top: 6px; margin-bottom: 12px; display: inline-block; "
+                      "box-shadow: inset 0 0 10px rgba(0,0,0,0.7); text-align: center;'>%2</div>"
+                      ).arg(color, value);
+    };
+
+    // 🟡 Додаємо кожну метрику окремо
+    appendMetricSeparated("Нанесено шкоди", QString::number(qRound(metrics.value("totalDamageDealt", 0.0).toDouble())), "#ffd166");
+    appendMetricSeparated("Знищено", QString::number(qRound(metrics.value("kills", 0.0).toDouble())), "#ff7b7b");
+    appendMetricSeparated("Допомога команді", QString::number(qRound(metrics.value("damageAssisted", 0.0).toDouble())), "#7be495");
+    appendMetricSeparated("Заблоковано шкоди", QString::number(qRound(metrics.value("damageBlockedByArmor", 0.0).toDouble())), "#a0aaff");
+
+    report += "</div>";
+
+
+
+
+
+    // Інші показники
+    report += "<div style='margin-top:12px;'>";
+    report += QString("<div><b>Постріли / Влучання / Пробиття:</b> %1 / %2 / %3</div>")
+                  .arg(qRound(metrics.value("shots", 0.0).toDouble()))
+                  .arg(qRound(metrics.value("hits", 0.0).toDouble()))
+                  .arg(qRound(metrics.value("piercings", 0.0).toDouble()));
+    report += QString("<div><b>Досвід:</b> %1  &nbsp; <b>Кредити:</b> %2</div>")
+                  .arg(qRound(metrics.value("xp", 0.0).toDouble()))
+                  .arg(qRound(metrics.value("credits", 0.0).toDouble()));
+    report += "</div>";
+
+    // 📊 Ключові метрики
+    report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Ключові метрики ефективності</h2>";
     if (!metrics.isEmpty()) {
-        report += "<ul>";
-        report += "<li><b>Точність стрільби:</b> " + metrics.value("accuracy").toString() + "</li>";
-        report += "<li><b>Ефективність пробиття:</b> " + metrics.value("penetrationRatio").toString() + "</li>";
+        report += "<ul style='margin-left:18px;'>";
+        report += QString("<li><b>Точність стрільби:</b> %1</li>").arg(metrics.value("accuracy").toString());
+        report += QString("<li><b>Ефективність пробиття:</b> %1</li>").arg(metrics.value("penetrationRatio").toString());
         report += QString("<li><b>Середня шкода за пробиття:</b> %1</li>").arg(metrics.value("avgDmgPerPen").toInt());
         report += QString("<li><b>Сумарний внесок (шкода + асист + блок):</b> %1</li>").arg(metrics.value("combinedContribution").toInt());
         report += "</ul>";
     } else {
-        report += "<p>Недостатньо даних для розрахунку.</p>";
+        report += "<p style='color:#ffd966;'>Недостатньо даних для розрахунку ключових метрик.</p>";
     }
 
-    // --- Аналіз ігрової поведінки ---
-    report += "<h2>Аналіз ігрової поведінки</h2>";
+    // 🧠 Аналіз поведінки
+    report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Аналіз ігрової поведінки</h2>";
     QString performanceGrade = behavior.value("performanceGrade").toString();
-
     if (performanceGrade.contains("помилка даних")) {
-        report += "<p style='color: #ffcc00;'><b>Не вдалося провести аналіз:</b> танк не знайдено у внутрішній базі даних. Основні показники бою відображено, але оцінка ефективності неможлива.</p>";
+        report += "<p style='color:#ffcc00;'><b>Не вдалося провести детальний аналіз:</b> танк не знайдено у внутрішній базі даних. Відображено базові показники.</p>";
     } else if (!behavior.isEmpty()) {
-        report += "<ul>";
-        report += "<li><b>Оцінка ефективності:</b> " + performanceGrade + "</li>";
-        report += "<li><b>Виконання ролі:</b> " + behavior.value("rolePerformance").toString() + "</li>";
+        report += "<ul style='margin-left:18px;'>";
+        report += QString("<li><b>Оцінка ефективності:</b> %1</li>").arg(performanceGrade);
+        report += QString("<li><b>Виконання ролі:</b> %1</li>").arg(behavior.value("rolePerformance").toString());
         QString keySkill = behavior.value("keySkill").toString();
-        if (keySkill != "Не визначено") {
-            report += "<li><b>Ключовий навик у бою:</b> " + keySkill + "</li>";
+        if (!keySkill.isEmpty() && keySkill != "Не визначено") {
+            report += QString("<li><b>Ключовий навик у бою:</b> %1</li>").arg(keySkill);
         }
         report += "</ul>";
     } else {
-        report += "<p>Недостатньо даних для аналізу.</p>";
+        report += "<p style='color:#c0cbdc;'>Недостатньо даних для аналізу поведінки.</p>";
     }
 
-    // --- Персональні рекомендації ---
-    report += "<h2>Персональні рекомендації</h2>";
+    // 📌 Рекомендації
+    report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Персональні рекомендації</h2>";
     if (!recommendations.isEmpty() && !performanceGrade.contains("помилка даних")) {
-        report += "<ul>";
+        report += "<ul style='margin-left:18px;'>";
         for (const QString &rec : recommendations) {
-            report += "<li>" + rec + "</li>";
+            report += QString("<li>• %1</li>").arg(rec);
         }
         report += "</ul>";
     } else if (performanceGrade.contains("помилка даних")) {
-        report += "<p>Рекомендації не можуть бути сформовані, оскільки танк не знайдено у базі даних.</p>";
+        report += "<p style='color:#ffb3b3;'>Рекомендації не можуть бути сформовані — танк не знайдено у базі даних.</p>";
+    } else {
+        report += "<p style='color:#c0cbdc;'>Рекомендації не сформовано.</p>";
     }
-    else {
-        report += "<p>Рекомендації не сформовано.</p>";
-    }
+
+    report += "</div>"; // container
+    report += "</div>";
 
     m_resultsTextEdit->clear();
     m_resultsTextEdit->setHtml(report);
 }
 
+
+// Delete selected replay (UI + try remove from DB)
+void ReplayAnalyzerPage::onDeleteSelectedClicked()
+{
+    auto *item = m_replayList->currentItem();
+    if (!item) {
+        QMessageBox::information(this, "Нічого не вибрано", "Оберіть реплей у списку, щоб його видалити.");
+        return;
+    }
+
+    QString filePath = item->data(Qt::UserRole).toString();
+    QMessageBox::StandardButton reply = QMessageBox::question(this, "Видалити реплей",
+                                                              QString("Ви дійсно хочете видалити \"%1\" з списку?").arg(item->text()),
+                                                              QMessageBox::Yes | QMessageBox::No);
+    if (reply != QMessageBox::Yes) return;
+
+    delete m_replayList->takeItem(m_replayList->row(item));
+
+    if (m_dbManager) {
+        bool invoked = QMetaObject::invokeMethod(m_dbManager, "removeReplayData", Q_ARG(QString, filePath));
+        if (!invoked) {
+            QMetaObject::invokeMethod(m_dbManager, "removeReplay", Q_ARG(QString, filePath));
+        }
+    }
+}
+
+// Export current HTML report to PDF
+void ReplayAnalyzerPage::onExportPdfClicked()
+{
+    QString html = m_resultsTextEdit->toHtml();
+    if (html.trimmed().isEmpty()) {
+        QMessageBox::information(this, "Немає звіту", "Спочатку виконайте аналіз реплею, щоб експортувати звіт у PDF.");
+        return;
+    }
+
+    QString suggested = QDir::homePath() + "/replay_report.pdf";
+    QString fileName = QFileDialog::getSaveFileName(this, "Експорт в PDF", suggested, "PDF files (*.pdf)");
+    if (fileName.isEmpty()) return;
+
+    QPrinter printer(QPrinter::HighResolution);
+    printer.setOutputFormat(QPrinter::PdfFormat);
+    printer.setOutputFileName(fileName);
+    printer.setPageMargins(QMarginsF(15, 15, 15, 15));
+
+    QTextDocument doc;
+    doc.setDefaultFont(QFont("Segoe UI", 10));
+    doc.setHtml(html);
+   // doc.setPageSize(printer.pageRect().size());
+
+    doc.print(&printer);
+
+    QMessageBox::information(this, "Експортовано", QString("Звіт збережено у PDF: %1").arg(fileName));
+}
+
+// Clear list + DB
 void ReplayAnalyzerPage::onClearReplaysButtonClicked() {
-    QMessageBox::StandardButton reply;
-    reply = QMessageBox::question(this, "Очищення списку", "Ви впевнені, що хочете очистити весь список реплеїв? Дані аналізу буде видалено.",
-                                  QMessageBox::Yes | QMessageBox::No);
+    QMessageBox::StandardButton reply =
+        QMessageBox::question(this, "Очищення списку",
+                              "Ви впевнені, що хочете очистити весь список реплеїв? Дані аналізу буде видалено.",
+                              QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::Yes) {
         if (m_dbManager) {
             m_dbManager->clearAllData();

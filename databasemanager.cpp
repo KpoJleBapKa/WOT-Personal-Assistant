@@ -51,6 +51,7 @@ bool DatabaseManager::saveData() {
     file.write(doc.toJson(QJsonDocument::Indented));
     qDebug() << "Data saved successfully.";
     file.close();
+    emit dataChanged(); // ❗️ Повідомляємо про зміни
     return true;
 }
 

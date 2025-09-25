@@ -106,7 +106,7 @@ void MainWindow::setupUI() {
     // Створення сторінок
     // Тут ми передаємо m_dbManager у конструктор ReplayAnalyzerPage
     m_replayPage = new ReplayAnalyzerPage(m_dbManager, this);
-    m_profilePage = new PlayerProfilePage(this);
+    m_profilePage = new PlayerProfilePage(m_dbManager, this);
 
     m_stackedWidget->addWidget(m_replayPage);
     m_stackedWidget->addWidget(m_profilePage);
@@ -129,6 +129,7 @@ void MainWindow::onMenuClicked(QListWidgetItem *item) {
         m_stackedWidget->setCurrentIndex(0);
     } else if (item->text() == "Профіль гравця") {
         m_stackedWidget->setCurrentIndex(1);
+        m_profilePage->refreshProfile(); // ❗️ Викликаємо оновлення при кожному відкритті вкладки
     }
 }
 

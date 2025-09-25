@@ -17,6 +17,8 @@ public:
     QVariantMap getReplayData(const QString &filePath);
     QVariantList getReplays();
     bool clearAllData(); // 🔹 Оголошення методу clearAllData()
+Q_SIGNALS:
+    void dataChanged(); // Сигнал про те, що дані реплеїв змінилися
 
 private:
     bool loadData();

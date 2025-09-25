@@ -25,6 +25,7 @@ SOURCES += \
 
 HEADERS += \
     behavioranalyzer.h \
+    blowfish_tables.h \
     databasemanager.h \
     datamodels.h \
     mainwindow.h \

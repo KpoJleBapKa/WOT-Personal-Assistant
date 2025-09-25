@@ -189,7 +189,9 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
     // Спочатку розраховуємо всі метрики, щоб отримати доступ до чистої назви танка
     QVariantMap metrics = m_metricsCalculator->calculate(data);
     QVariantMap behavior = m_behaviorAnalyzer->analyze(data, metrics);
-    QStringList recommendations = m_recommenderSystem->generate(metrics, behavior);
+    // ❗️ ВИПРАВЛЕНО: Додано третій аргумент 'data'
+    QStringList recommendations = m_recommenderSystem->generate(data, metrics, behavior);
+
 
     // --- Базова інформація ---
     report += "<h2>Базова інформація</h2>";
@@ -233,30 +235,18 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
     report += "<h2>Результати гравця: " + (playerName.isEmpty() ? "Невідомо" : playerName) + "</h2>";
     report += "<ul>";
 
-    if (data.contains("personal") && data.contains("playerID")) {
-        QVariantMap personalData = data.value("personal").toMap();
-        quint64 playerID = data.value("playerID").toULongLong();
-        bool foundStats = false;
-        for (auto it = personalData.constBegin(); it != personalData.constEnd(); ++it) {
-            if (it.key() == "avatar") continue;
-            QVariantMap vehicleStats = it.value().toMap();
-            if (vehicleStats.value("accountDBID").toULongLong() == playerID) {
-                foundStats = true;
-                report += "<ul>";
-                report += "<li><b>Нанесено шкоди:</b> " + vehicleStats.value("damageDealt", 0).toString() + "</li>";
-                report += "<li><b>Допомога у збитку (радіо):</b> " + vehicleStats.value("damageAssistedRadio", 0).toString() + "</li>";
-                report += "<li><b>Допомога у збитку (гусениці):</b> " + vehicleStats.value("damageAssistedTrack", 0).toString() + "</li>";
-                report += "<li><b>Заблоковано шкоди:</b> " + vehicleStats.value("damageBlockedByArmor", 0).toString() + "</li>";
-                report += "<li><b>Знищено:</b> " + vehicleStats.value("kills", 0).toString() + "</li>";
-                report += "</ul>";
-            }
-        }
-        if (!foundStats) {
-            report += "<li>Не вдалося знайти результати для гравця.</li>";
-        }
-    } else {
-        report += "<li>Дані про результати гравця не знайдено.</li>";
-    }
+    double totalDamage = metrics.value("totalDamageDealt", 0.0).toDouble();
+    double shots = metrics.value("shots", 0.0).toDouble();
+    double hits = metrics.value("hits", 0.0).toDouble();
+    double piercings = metrics.value("piercings", 0.0).toDouble();
+    report += QString("<li><b>Нанесено шкоди:</b> %1</li>").arg(qRound(totalDamage));
+    report += QString("<li><b>Допомога команді:</b> %1</li>").arg(qRound(metrics.value("damageAssisted", 0.0).toDouble()));
+    report += QString("<li><b>Заблоковано шкоди:</b> %1</li>").arg(qRound(metrics.value("damageBlockedByArmor", 0.0).toDouble()));
+    report += QString("<li><b>Знищено:</b> %1</li>").arg(qRound(metrics.value("kills", 0.0).toDouble()));
+    report += QString("<li><b>Виявлено ворогів:</b> %1</li>").arg(qRound(metrics.value("spotted", 0.0).toDouble()));
+    report += QString("<li><b>Постріли / Влучання / Пробиття:</b> %1 / %2 / %3</li>").arg(qRound(shots)).arg(qRound(hits)).arg(qRound(piercings));
+    report += QString("<li><b>Досвід:</b> %1</li>").arg(qRound(metrics.value("xp", 0.0).toDouble()));
+    report += QString("<li><b>Кредити:</b> %1</li>").arg(qRound(metrics.value("credits", 0.0).toDouble()));
     report += "</ul>";
 
     // --- Ключові метрики ефективності ---
@@ -265,6 +255,8 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
         report += "<ul>";
         report += "<li><b>Точність стрільби:</b> " + metrics.value("accuracy").toString() + "</li>";
         report += "<li><b>Ефективність пробиття:</b> " + metrics.value("penetrationRatio").toString() + "</li>";
+        report += QString("<li><b>Середня шкода за пробиття:</b> %1</li>").arg(metrics.value("avgDmgPerPen").toInt());
+        report += QString("<li><b>Сумарний внесок (шкода + асист + блок):</b> %1</li>").arg(metrics.value("combinedContribution").toInt());
         report += "</ul>";
     } else {
         report += "<p>Недостатньо даних для розрахунку.</p>";
@@ -280,6 +272,10 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
         report += "<ul>";
         report += "<li><b>Оцінка ефективності:</b> " + performanceGrade + "</li>";
         report += "<li><b>Виконання ролі:</b> " + behavior.value("rolePerformance").toString() + "</li>";
+        QString keySkill = behavior.value("keySkill").toString();
+        if (keySkill != "Не визначено") {
+            report += "<li><b>Ключовий навик у бою:</b> " + keySkill + "</li>";
+        }
         report += "</ul>";
     } else {
         report += "<p>Недостатньо даних для аналізу.</p>";

@@ -179,6 +179,19 @@ ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *pare
 
 ReplayAnalyzerPage::~ReplayAnalyzerPage() {}
 
+QString ReplayAnalyzerPage::cleanVehicleName(const QString &technicalName)
+{
+    // Технічні назви часто мають формат "нація-код_назва", наприклад "usa-A12_T29"
+    // Ми просто беремо частину після останнього символу '_'
+    int lastUnderscorePos = technicalName.lastIndexOf('_');
+    if (lastUnderscorePos != -1) {
+        return technicalName.mid(lastUnderscorePos + 1);
+    }
+
+    // Якщо раптом формат інший, повертаємо назву як є
+    return technicalName;
+}
+
 // -------------------- UI / interaction methods --------------------
 
 void ReplayAnalyzerPage::onSelectFileButtonClicked() {
@@ -313,6 +326,18 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
     QVariantMap metrics = m_metricsCalculator->calculate(data);
     QVariantMap behavior = m_behaviorAnalyzer->analyze(data, metrics);
     QStringList recommendations = m_recommenderSystem->generate(data, metrics, behavior);
+
+    QMap<quint32, QVariantMap> vehicleIdMap;
+    if (data.contains("vehicles")) {
+        QVariantMap vehiclesData = data.value("vehicles").toMap();
+        for (auto it = vehiclesData.constBegin(); it != vehiclesData.constEnd(); ++it) {
+            bool ok;
+            quint32 vehicleId = it.key().toUInt(&ok);
+            if (ok) {
+                vehicleIdMap.insert(vehicleId, it.value().toMap());
+            }
+        }
+    }
 
     QString report;
     report += "<div style='font-family:Segoe UI, Roboto, sans-serif; color:#e6eef6;'>";
@@ -451,6 +476,9 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
         report += "<p style='color:#c0cbdc;'>Рекомендації не сформовано.</p>";
     }
 
+    report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Хронологія бою</h2>";
+    report += generateTimelineHtml(data, vehicleIdMap);
+
     report += "</div>"; // container
     report += "</div>";
 
@@ -458,6 +486,87 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
     m_resultsTextEdit->setHtml(report);
 }
 
+QString ReplayAnalyzerPage::generateTimelineHtml(const QVariantMap &data, const QMap<quint32, QVariantMap> &vehicleIdMap)
+{
+    if (!data.contains("shot_events") || !data.contains("playerID")) {
+        return "<p><i>Дані для хронології відсутні.</i></p>";
+    }
+
+    QVariantList shotEvents = data.value("shot_events").toList();
+    quint32 recorderPlayerId = data.value("playerID").toUInt();
+
+    if (shotEvents.isEmpty()) {
+        return "<p><i>У цьому бою не було зафіксовано подій нанесення/отримання шкоди.</i></p>";
+    }
+
+    QString html;
+    html += R"(
+        <style>
+            .timeline-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            .timeline-table th, .timeline-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #2a2a2a; }
+            .timeline-table th { color: #a0b0ff; font-weight: 600; }
+            .timeline-table tr:last-child td { border-bottom: none; }
+            .damage-dealt { color: #ffd166; }
+            .damage-received { color: #ff8e8e; }
+            .no-damage { color: #a0a0a0; }
+        </style>
+    )";
+    html += "<table class='timeline-table'>";
+    html += "<thead><tr><th>Час</th><th>Подія</th><th style='text-align:right;'>Шкода</th></tr></thead><tbody>";
+
+    for (const QVariant &eventVar : shotEvents) {
+        QVariantMap event = eventVar.toMap();
+        quint32 attackerId = event.value("attackerId").toUInt();
+        quint32 targetId = event.value("targetId").toUInt();
+
+        // Нас цікавлять лише події, де наш гравець є учасником
+        if (attackerId != recorderPlayerId && targetId != recorderPlayerId) {
+            continue;
+        }
+
+        // Форматуємо час з секунд у формат ММ:СС
+        float timestamp = event.value("timestamp").toFloat();
+        int totalSeconds = qRound(timestamp);
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+        QString formattedTime = QString("%1:%2").arg(minutes, 2, 10, QChar('0')).arg(seconds, 2, 10, QChar('0'));
+
+        QString attackerTank = cleanVehicleName(vehicleIdMap.value(attackerId).value("vehicleType").toString());
+        QString targetTank = cleanVehicleName(vehicleIdMap.value(targetId).value("vehicleType").toString());
+
+        QString description;
+        QString damageStr;
+        QString rowClass;
+
+        quint16 damage = event.value("damage").toUInt();
+
+        if (attackerId == recorderPlayerId) { // Ми атакуємо
+            rowClass = "damage-dealt";
+            description = QString("Ви атакували <b>%1</b>").arg(targetTank.isEmpty() ? "Невідомий" : targetTank);
+        } else { // Нас атакують
+            rowClass = "damage-received";
+            description = QString("<b>%1</b> атакував вас").arg(attackerTank.isEmpty() ? "Невідомий" : attackerTank);
+        }
+
+        if (damage > 0) {
+            damageStr = QString::number(damage);
+        } else {
+            rowClass = "no-damage";
+            damageStr = "—"; // Риска для "нульових" подій
+            if (event.value("isRicochet").toBool()) {
+                description += " (рикошет)";
+            } else if (!event.value("isPenetration").toBool()) {
+                description += " (не пробито)";
+            }
+        }
+
+        html += QString("<tr class='%1'><td>%2</td><td>%3</td><td style='text-align:right;'><b>%4</b></td></tr>")
+                    .arg(rowClass, formattedTime, description, damageStr);
+    }
+
+    html += "</tbody></table>";
+    return html;
+}
 
 // Delete selected replay (UI + try remove from DB)
 void ReplayAnalyzerPage::onDeleteSelectedClicked()

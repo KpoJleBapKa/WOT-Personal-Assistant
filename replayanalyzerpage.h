@@ -5,6 +5,7 @@
 #include <QFutureWatcher>
 #include <QVariantMap>
 #include <QListWidget>
+#include <QMap>
 
 #include "ReplayParser.h"
 #include "DatabaseManager.h"
@@ -41,6 +42,7 @@ private:
     void displayStructuredResults(const QVariantMap &data);
     void displayResults(const QString& results);
     QString cleanVehicleName(const QString &technicalName);
+    QString generateTimelineHtml(const QVariantMap &data, const QMap<quint32, QVariantMap> &vehicleIdMap);
 
     // UI
     QPushButton *m_selectFileButton;

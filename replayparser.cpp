@@ -7,13 +7,10 @@
 #include <QDataStream>
 #include <QDebug>
 #include <QtGlobal>
-
-// === ЦЕ ВИПРАВЛЕННЯ: ПЕРЕМІЩУЄМО #include СЮДИ ===
-#include "blowfish_tables.h"
-// ================================================
+#include "blowfish_tables.h" // Переконайтеся, що цей файл підключено
 
 // ======================================================================
-// === ВБУДОВАНА РЕАЛІЗАЦІЯ BLOWFISH (замість Crypto++) ==================
+// === ВБУДОВАНА РЕАЛІЗАЦІЯ BLOWFISH (залишається без змін) =============
 // ======================================================================
 namespace LightweightBlowfish {
 // Структура для зберігання ключів
@@ -21,8 +18,6 @@ struct BlowfishContext {
     quint32 p[18];
     quint32 s[4][256];
 };
-
-// Оригінальні P-блоки та S-блоки тепер підключаються вище
 
 void blowfish_encrypt(BlowfishContext* ctx, quint32* xl, quint32* xr) {
     for (int i = 0; i < 16; ++i) {
@@ -102,17 +97,14 @@ QByteArray ReplayParser::decryptStream(const QByteArray &encryptedData)
 
     for (int i = 0; i < encryptedData.size(); i += blockSize) {
         quint32 xl, xr;
-        // Копіюємо зашифрований блок
         memcpy(&xl, encryptedData.constData() + i, 4);
         memcpy(&xr, encryptedData.constData() + i + 4, 4);
 
-        // Конвертуємо Little Endian в Host Order
         xl = qFromLittleEndian(xl);
         xr = qFromLittleEndian(xr);
 
         LightweightBlowfish::blowfish_decrypt(&ctx, &xl, &xr);
 
-        // Конвертуємо назад в Little Endian для запису
         xl = qToLittleEndian(xl);
         xr = qToLittleEndian(xr);
 
@@ -132,10 +124,6 @@ QByteArray ReplayParser::decryptStream(const QByteArray &encryptedData)
     return decryptedData;
 }
 
-
-// ======================================================================
-// === РЕШТА КОДУ ЗАЛИШАЄТЬСЯ БЕЗ ЗМІН ===================================
-// ======================================================================
 
 QVariantMap ReplayParser::parse(const QString &filePath)
 {
@@ -165,7 +153,7 @@ QVariantMap ReplayParser::parse(const QString &filePath)
         }
 
         QByteArray blockData = file.read(blockSize);
-        if (blockData.size() != blockSize) {
+        if (blockData.size() != (int)blockSize) {
             qWarning() << "Не вдалося прочитати дані блоку" << i;
             break;
         }
@@ -212,6 +200,7 @@ QVariantMap ReplayParser::parse(const QString &filePath)
 }
 
 
+// ❗️❗️❗️ --- ОНОВЛЕНИЙ МЕТОД ПАРСИНГУ ПАКЕТІВ --- ❗️❗️❗️
 void ReplayParser::parsePackets(const QByteArray &stream, QVariantMap &out_data)
 {
     qDebug() << "Починаємо детальний парсинг пакетів...";
@@ -225,6 +214,7 @@ void ReplayParser::parsePackets(const QByteArray &stream, QVariantMap &out_data)
     }
 
     QVariantList playerPositions;
+    QVariantList shotEvents; // Список для подій пострілів
 
     while (!streamReader.atEnd()) {
         if (stream.size() - streamReader.device()->pos() < 9) break;
@@ -235,32 +225,79 @@ void ReplayParser::parsePackets(const QByteArray &stream, QVariantMap &out_data)
         streamReader >> type >> timestamp >> payloadSize;
 
         long currentPosBeforePayload = streamReader.device()->pos();
-        if (stream.size() - currentPosBeforePayload < payloadSize) {
+        if (stream.size() - currentPosBeforePayload < (int)payloadSize) {
             qWarning() << "Помилка парсингу: неочікуваний кінець потоку.";
             break;
         }
 
-        if (type == 0x0A && payloadSize >= 21) {
-            quint32 playerId;
-            float x, y, z;
-            streamReader.skipRawData(1);
-            streamReader >> playerId;
-            streamReader.skipRawData(4);
-            streamReader >> x >> y >> z;
+        QByteArray payload = stream.mid(currentPosBeforePayload, payloadSize);
 
-            if (playerId == recorderPlayerId) {
-                QVariantMap positionData;
-                positionData["timestamp"] = timestamp;
-                positionData["x"] = x;
-                positionData["y"] = y;
-                positionData["z"] = z;
-                playerPositions.append(positionData);
+        switch (type) {
+        // --- Обробка позиції гравця (як і раніше) ---
+        case 0x0A: {
+            if (payloadSize >= 21) {
+                QDataStream payloadReader(payload);
+                payloadReader.setByteOrder(QDataStream::LittleEndian);
+                quint32 playerId;
+                float x, y, z;
+                payloadReader.skipRawData(1); // subType
+                payloadReader >> playerId;
+                payloadReader.skipRawData(4); // unknown
+                payloadReader >> x >> y >> z;
+
+                if (playerId == recorderPlayerId) {
+                    QVariantMap positionData;
+                    positionData["timestamp"] = timestamp;
+                    positionData["x"] = x;
+                    positionData["y"] = y;
+                    positionData["z"] = z;
+                    playerPositions.append(positionData);
+                }
             }
+            break;
         }
 
+            // --- НОВА ОБРОБКА ПОДІЙ ШКОДИ ---
+        case 0x08: {
+            if (payloadSize < 12) break;
+            QDataStream payloadReader(payload);
+            payloadReader.setByteOrder(QDataStream::LittleEndian);
+
+            quint32 entityId, methodId, argSize;
+            payloadReader >> entityId >> methodId >> argSize;
+
+            // Метод receiveDamage зазвичай має ID в цьому діапазоні. Це дозволяє
+            // відфільтрувати тисячі інших викликів методів.
+            if (methodId >= 90 && methodId <= 110 && payloadSize >= 22) {
+                payloadReader.skipRawData(8); // Пропускаємо pickle'd-кортеж (Tuple)
+
+                quint32 attackerId;
+                quint16 damage, shellId, flags;
+
+                payloadReader >> attackerId >> damage;
+                payloadReader.skipRawData(2); // Пропускаємо sourceID
+                payloadReader >> shellId >> flags;
+
+                ShotEvent event;
+                event.timestamp = timestamp;
+                event.attackerId = attackerId;
+                event.targetId = entityId;
+                event.damage = damage;
+                event.shellId = shellId;
+                event.isPenetration = (flags & 0x02) != 0;
+                event.isRicochet = (flags & 0x40) != 0;
+                event.criticalFlags = (flags >> 8) & 0xFFFF;
+
+                shotEvents.append(event.toVariantMap());
+            }
+            break;
+        }
+        }
+        // Переміщуємо вказівник на початок наступного пакета
         streamReader.device()->seek(currentPosBeforePayload + payloadSize);
     }
 
     out_data["player_positions"] = playerPositions;
-    qDebug() << "Парсинг завершено. Знайдено" << playerPositions.size() << "записів про позицію гравця.";
+    out_data["shot_events"] = shotEvents; // Додаємо новий список у результат
+    qDebug() << "Парсинг завершено. Знайдено" << playerPositions.size() << "записів про позицію та" << shotEvents.size() << "подій шкоди.";
 }

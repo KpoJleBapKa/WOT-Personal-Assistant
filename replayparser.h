@@ -3,30 +3,41 @@
 
 #include <QObject>
 #include <QVariantMap>
+#include <QStringList>
 
-// ❗️ НОВА СТРУКТУРА: Описує подію нанесення шкоди
 struct ShotEvent {
-    float timestamp = 0.0f;
+    float timestamp = 0.0;
     quint32 attackerId = 0;
     quint32 targetId = 0;
-    quint16 damage = 0;
-    quint16 criticalFlags = 0; // Бітмаска для критів
-    quint16 shellId = 0;       // ID снаряда
-    bool isRicochet = false;
-    bool isPenetration = false;
+    qint16 damage = 0;
 
-    // Допоміжна функція для легкої конвертації у QVariantMap
+    QString attackerName;
+    QString targetName;
+    bool isFriendlyFire = false;
+
+    bool isPenetration = false; // Пробиття
+    bool isRicochet = false;    // Рикошет
+    bool isShellExplosion = false; // Вибух снаряда (сплеш)
+    bool isNoDamage = false;      // Влучання без шкоди (потрапив у екран/модуль)
+
+    QStringList criticalHits; // Список критичних пошкоджень
+
+    // Метод для зручного перетворення в QVariantMap для збереження
     QVariantMap toVariantMap() const {
-        QVariantMap map;
-        map["timestamp"] = timestamp;
-        map["attackerId"] = attackerId;
-        map["targetId"] = targetId;
-        map["damage"] = damage;
-        map["criticalFlags"] = criticalFlags;
-        map["shellId"] = shellId;
-        map["isRicochet"] = isRicochet;
-        map["isPenetration"] = isPenetration;
-        return map;
+        return {
+            {"timestamp", timestamp},
+            {"attackerId", attackerId},
+            {"targetId", targetId},
+            {"damage", damage},
+            {"attackerName", attackerName},
+            {"targetName", targetName},
+            {"isFriendlyFire", isFriendlyFire},
+            {"isPenetration", isPenetration},
+            {"isRicochet", isRicochet},
+            {"isShellExplosion", isShellExplosion},
+            {"isNoDamage", isNoDamage},
+            {"criticalHits", criticalHits}
+        };
     }
 };
 

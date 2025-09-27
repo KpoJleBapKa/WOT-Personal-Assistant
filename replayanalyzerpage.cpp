@@ -323,10 +323,21 @@ void ReplayAnalyzerPage::handleAnalysisFinished() {
 
 void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
 {
+    QString playerName = data.value("playerName").toString();
     QVariantMap metrics = m_metricsCalculator->calculate(data);
     QVariantMap behavior = m_behaviorAnalyzer->analyze(data, metrics);
     QStringList recommendations = m_recommenderSystem->generate(data, metrics, behavior);
 
+    quint32 recorderEntityId = 0;
+    if (data.contains("vehicles")) {
+        QVariantMap vehiclesData = data.value("vehicles").toMap();
+        for (auto it = vehiclesData.constBegin(); it != vehiclesData.constEnd(); ++it) {
+            if (it.value().toMap().value("name").toString() == playerName) {
+                recorderEntityId = it.key().toUInt();
+                break;
+            }
+        }
+    }
     QMap<quint32, QVariantMap> vehicleIdMap;
     if (data.contains("vehicles")) {
         QVariantMap vehiclesData = data.value("vehicles").toMap();
@@ -353,7 +364,7 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
     report += "<h2 style='margin:6px 0 8px 0; font-size:16px; color:#9fc4ff;'>Базова інформація</h2>";
     report += "<ul style='margin:0 0 8px 18px;'>";
 
-    QString playerName = data.value("playerName").toString();
+
     QString mapName = data.value("mapDisplayName").toString();
     QString cleanName = metrics.value("cleanVehicleName").toString();
 
@@ -477,7 +488,7 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
     }
 
     report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Хронологія бою</h2>";
-    report += generateTimelineHtml(data, vehicleIdMap);
+    report += generateTimelineHtml(data, recorderEntityId); // Замість vehicleIdMap
 
     report += "</div>"; // container
     report += "</div>";
@@ -486,82 +497,89 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
     m_resultsTextEdit->setHtml(report);
 }
 
-QString ReplayAnalyzerPage::generateTimelineHtml(const QVariantMap &data, const QMap<quint32, QVariantMap> &vehicleIdMap)
+QString ReplayAnalyzerPage::generateTimelineHtml(const QVariantMap &data, quint32 recorderEntityId)
 {
-    if (!data.contains("shot_events") || !data.contains("playerID")) {
-        return "<p><i>Дані для хронології відсутні.</i></p>";
+    if (recorderEntityId == 0 || !data.contains("shot_events")) {
+        return "<p style='color:#c0cbdc;'><i>Дані для хронології відсутні.</i></p>";
     }
 
     QVariantList shotEvents = data.value("shot_events").toList();
-    quint32 recorderPlayerId = data.value("playerID").toUInt();
-
     if (shotEvents.isEmpty()) {
-        return "<p><i>У цьому бою не було зафіксовано подій нанесення/отримання шкоди.</i></p>";
+        return "<p style='color:#c0cbdc;'><i>У цьому бою не було зафіксовано подій пострілів.</i></p>";
     }
 
     QString html;
     html += R"(
         <style>
-            .timeline-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            .timeline-table th, .timeline-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #2a2a2a; }
-            .timeline-table th { color: #a0b0ff; font-weight: 600; }
+            .timeline-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+            .timeline-table th, .timeline-table td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #2f2f2f; }
+            .timeline-table th { color: #aabfff; font-weight: 600; }
             .timeline-table tr:last-child td { border-bottom: none; }
-            .damage-dealt { color: #ffd166; }
-            .damage-received { color: #ff8e8e; }
-            .no-damage { color: #a0a0a0; }
+            .dealt { color: #ffd166; } .dealt .icon { color: #ffd166; }
+            .received { color: #ff8e8e; } .received .icon { color: #ff8e8e; }
+            .no-damage { color: #909090; }
+            .friendly-fire { background-color: rgba(255, 80, 80, 0.1); }
+            .crit { color: #ffb366; font-style: italic; font-size: 11px; }
+            .icon { font-size: 14px; margin-right: 5px; }
         </style>
     )";
     html += "<table class='timeline-table'>";
-    html += "<thead><tr><th>Час</th><th>Подія</th><th style='text-align:right;'>Шкода</th></tr></thead><tbody>";
+    html += "<thead><tr><th>Час</th><th>Подія</th><th style='text-align:right;'>Результат</th></tr></thead><tbody>";
 
     for (const QVariant &eventVar : shotEvents) {
         QVariantMap event = eventVar.toMap();
         quint32 attackerId = event.value("attackerId").toUInt();
         quint32 targetId = event.value("targetId").toUInt();
 
-        // Нас цікавлять лише події, де наш гравець є учасником
-        if (attackerId != recorderPlayerId && targetId != recorderPlayerId) {
+        // Фільтруємо події: нас цікавлять лише ті, де наш гравець - учасник
+        if (attackerId != recorderEntityId && targetId != recorderEntityId) {
             continue;
         }
 
-        // Форматуємо час з секунд у формат ММ:СС
+        // --- Форматування даних ---
         float timestamp = event.value("timestamp").toFloat();
-        int totalSeconds = qRound(timestamp);
-        int minutes = totalSeconds / 60;
-        int seconds = totalSeconds % 60;
-        QString formattedTime = QString("%1:%2").arg(minutes, 2, 10, QChar('0')).arg(seconds, 2, 10, QChar('0'));
+        int minutes = static_cast<int>(timestamp) / 60;
+        int seconds = static_cast<int>(timestamp) % 60;
+        QString timeStr = QString("%1:%2").arg(minutes, 2, 10, QChar('0')).arg(seconds, 2, 10, QChar('0'));
 
-        QString attackerTank = cleanVehicleName(vehicleIdMap.value(attackerId).value("vehicleType").toString());
-        QString targetTank = cleanVehicleName(vehicleIdMap.value(targetId).value("vehicleType").toString());
+        QString attackerName = event.value("attackerName").toString();
+        QString targetName = event.value("targetName").toString();
+        qint16 damage = event.value("damage").toInt();
+        QStringList crits = event.value("criticalHits").toStringList();
 
-        QString description;
-        QString damageStr;
-        QString rowClass;
+        QString rowClass, description, result;
 
-        quint16 damage = event.value("damage").toUInt();
-
-        if (attackerId == recorderPlayerId) { // Ми атакуємо
-            rowClass = "damage-dealt";
-            description = QString("Ви атакували <b>%1</b>").arg(targetTank.isEmpty() ? "Невідомий" : targetTank);
+        // --- Визначаємо напрямок дії та стиль ---
+        if (attackerId == recorderEntityId) { // Ми атакуємо
+            rowClass = "dealt";
+            description = QString("Ви → <b>%1</b>").arg(targetName);
         } else { // Нас атакують
-            rowClass = "damage-received";
-            description = QString("<b>%1</b> атакував вас").arg(attackerTank.isEmpty() ? "Невідомий" : attackerTank);
+            rowClass = "received";
+            description = QString("<b>%1</b> → Вас").arg(attackerName);
         }
 
+        if (event.value("isFriendlyFire").toBool()) {
+            rowClass += " friendly-fire";
+            description += " <span style='color:#ff5555;'>(Союзник!)</span>";
+        }
+
+        // --- Формуємо результат події ---
         if (damage > 0) {
-            damageStr = QString::number(damage);
+            result = QString("<span class='icon'>🎯</span><b>%1</b>").arg(damage);
         } else {
-            rowClass = "no-damage";
-            damageStr = "—"; // Риска для "нульових" подій
-            if (event.value("isRicochet").toBool()) {
-                description += " (рикошет)";
-            } else if (!event.value("isPenetration").toBool()) {
-                description += " (не пробито)";
-            }
+            rowClass += " no-damage";
+            if (event.value("isRicochet").toBool()) result = "<span class='icon'>튕</span>Рикошет";
+            else if (!event.value("isPenetration").toBool()) result = "<span class='icon'>🛡️</span>Не пробито";
+            else result = "<span class='icon'>✋</span>Без шкоди";
         }
 
-        html += QString("<tr class='%1'><td>%2</td><td>%3</td><td style='text-align:right;'><b>%4</b></td></tr>")
-                    .arg(rowClass, formattedTime, description, damageStr);
+        if (!crits.isEmpty()) {
+            result += QString("<br><span class='crit'>%1</span>").arg(crits.join(", "));
+        }
+
+        // --- Збираємо рядок таблиці ---
+        html += QString("<tr class='%1'><td>%2</td><td>%3</td><td style='text-align:right;'>%4</td></tr>")
+                    .arg(rowClass, timeStr, description, result);
     }
 
     html += "</tbody></table>";

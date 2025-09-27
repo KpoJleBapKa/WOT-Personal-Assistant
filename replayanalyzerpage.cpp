@@ -333,18 +333,18 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
 
     // --- 2. Початок формування HTML-звіту ---
     QString report;
-    QLocale locale(QLocale::English); // Для форматування чисел (напр., 6,302)
+    QLocale locale(QLocale::English); // Для форматування чисел
     report += "<div style='font-family:Segoe UI, Roboto, sans-serif; color:#e6eef6;'>";
 
-    // Заголовок (залишається без змін)
+    // Заголовок (без змін)
     report += "<div style='display:flex; align-items:center; gap:12px;'>"
               "<h1 style='margin:0; font-size:20px;'>📄 Звіт про аналіз реплею</h1>"
               "</div>";
 
-    // Головний контейнер (залишається без змін)
+    // Головний контейнер (без змін)
     report += "<div style='margin-top:10px; padding:12px; background:#141414; border:1px solid #2b2b2b; border-radius:8px;'>";
 
-    // --- Блок "Базова інформація" (ДОПОВНЕНО) ---
+    // --- Блок "Базова інформація" (без змін) ---
     report += "<h2 style='margin:6px 0 8px 0; font-size:16px; color:#9fc4ff;'>Загальна інформація про бій</h2>";
     report += "<ul style='margin:0 0 8px 18px; line-height: 1.65;'>";
 
@@ -355,19 +355,14 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
 
     report += QString("<li><b>Гравець:</b> %1</li>").arg(playerName);
     report += QString("<li><b>Сервер:</b> %1</li>").arg(data.value("serverName", "N/A").toString());
-    report += QString("<li><b>Версія клієнта:</b> %1</li>").arg(data.value("clientVersionFromExe", "N/A").toString());
     report += QString("<li><b>Карта:</b> %1</li>").arg(data.value("mapDisplayName", "N/A").toString());
-    report += QString("<li><b>Режим гри:</b> %1</li>").arg(data.value("gameplayID", "N/A").toString());
-    report += QString("<li><b>Дата та час бою:</b> %1</li>").arg(data.value("dateTime", "N/A").toString());
-    report += QString("<li><b>Тривалість бою:</b> %1 секунд (%2 хв %3 с)</li>").arg(duration).arg(duration / 60).arg(duration % 60);
-    report += QString("<li><b>Переможець:</b> %1</li>").arg(winnerTeam == 0 ? "Нічия" : "Команда " + QString::number(winnerTeam));
+    report += QString("<li><b>Техніка:</b> %1</li>").arg(metrics.value("cleanVehicleName").toString());
 
-    // Додаємо результат конкретного гравця
     if (winnerTeam != 0 && playerTeam != 0) {
         QString outcome = (winnerTeam == playerTeam)
         ? "<span style='color:#88ff88; font-weight:600;'>Перемога</span>"
         : "<span style='color:#ff8888; font-weight:600;'>Поразка</span>";
-        report += QString("<li><b>Результат гравця:</b> %1</li>").arg(outcome);
+        report += QString("<li><b>Результат бою:</b> %1</li>").arg(outcome);
     }
     report += "</ul>";
 
@@ -386,57 +381,60 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
     report += "</div>";
 
 
-    // --- Блок "Інші показники" (ДОПОВНЕНО НОВИМИ ПОЛЯМИ) ---
-    report += "<div style='margin-top:12px; line-height: 1.7;'>";
-
-    // Додаємо деталі про гравця: Клан, Команда, Статус
+    // --- ВИПРАВЛЕНО: Блок "Бойова ефективність" та "Економіка" з уніфікованим стилем ---
+    // Спочатку шукаємо клан гравця в правильному місці
     QString clanAbbrev = "Немає";
-    QVariantMap vehicles = data.value("vehicles").toMap();
-    for (auto it = vehicles.constBegin(); it != vehicles.constEnd(); ++it) {
-        if (it.value().toMap().value("name").toString() == playerName) {
-            QString clan = it.value().toMap().value("clanAbbrev").toString();
-            if (!clan.isEmpty()) clanAbbrev = clan;
-            break;
+    if (data.contains("vehicles")) {
+        QVariantMap vehicles = data.value("vehicles").toMap();
+        for (auto it = vehicles.constBegin(); it != vehicles.constEnd(); ++it) {
+            QVariantMap vehicleData = it.value().toMap();
+            if (vehicleData.value("name").toString() == playerName) {
+                QString clan = vehicleData.value("clanAbbrev").toString();
+                if (!clan.isEmpty()) {
+                    clanAbbrev = clan;
+                }
+                break;
+            }
         }
     }
-    QString status = metrics.value("deathReason", -1).toInt() == -1
-                         ? QString("<span style='color:#88ff88;'>Вижив</span> (залишилося %1 HP)").arg(metrics.value("health").toInt())
-                         : "<span style='color:#ff8888;'>Знищено</span>";
-    report += QString("<div><b>Клан:</b> %1 &nbsp;&nbsp; <b>Команда:</b> %2 &nbsp;&nbsp; <b>Статус:</b> %1</div>").arg(clanAbbrev, QString::number(playerTeam), status);
 
-    // Додаємо блок "Бойова ефективність"
-    report += "<h3 style='margin:16px 0 8px 0; font-size:14px; color:#dfe8f8;'>Бойова ефективність</h3>";
-    report += QString("<div><b>Постріли / Влучання / Пробиття:</b> %1 / %2 / %3</div>")
+    report += QString("<p style='margin-top:12px;'><b>Клан:</b> %1 &nbsp;&nbsp; <b>Команда:</b> %2</p>").arg(clanAbbrev).arg(playerTeam);
+
+    // Блок "Бойова ефективність"
+    report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Бойова ефективність</h2>";
+    report += "<ul style='margin-left:18px; line-height: 1.65;'>";
+    report += QString("<li><b>Постріли / Влучання / Пробиття:</b> %1 / %2 / %3</li>")
                   .arg(metrics.value("shots", 0.0).toInt())
                   .arg(metrics.value("hits", 0.0).toInt())
                   .arg(metrics.value("piercings", 0.0).toInt());
-    report += QString("<div><b>Потенційно отримана шкода:</b> %1</div>").arg(locale.toString(metrics.value("potentialDamageReceived").toInt()));
-    report += QString("<div><b>Виявлено ворогів:</b> %1</div>").arg(metrics.value("spotted").toInt());
+    report += QString("<li><b>Потенційно отримана шкода:</b> %1</li>").arg(locale.toString(metrics.value("potentialDamageReceived").toInt()));
+    report += QString("<li><b>Виявлено ворогів:</b> %1</li>").arg(metrics.value("spotted").toInt());
 
-    // Формуємо рядок з досягненнями
     QString achievementsText;
     int masteryMark = metrics.value("markOfMastery").toInt();
     if (masteryMark > 0 && masteryMark < 4) achievementsText += QString("Знак класності %1, ").arg(masteryMark);
     if (metrics.value("isFirstBlood").toBool()) achievementsText += "\"Перша кров\", ";
     if (metrics.value("marksOnGun").toInt() > 0) achievementsText += QString("%1 відмітк(а/и) на стволі, ").arg(metrics.value("marksOnGun").toInt());
     achievementsText += QString("%1 інш. досягнень").arg(metrics.value("achievementsCount").toInt());
-    report += QString("<div><b>Досягнення:</b> %1</div>").arg(achievementsText);
+    report += QString("<li><b>Досягнення:</b> %1</li>").arg(achievementsText);
+    report += "</ul>";
 
-    // Додаємо блок "Економіка та досвід"
-    report += "<h3 style='margin:16px 0 8px 0; font-size:14px; color:#dfe8f8;'>Економіка та досвід</h3>";
-    report += QString("<div><b>Досвід за бій (чистий):</b> %1 (%2)</div>")
+    // Блок "Економіка та досвід"
+    report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Економіка та досвід</h2>";
+    report += "<ul style='margin-left:18px; line-height: 1.65;'>";
+    report += QString("<li><b>Досвід за бій (чистий):</b> %1 (%2)</li>")
                   .arg(locale.toString(metrics.value("xp").toInt()))
                   .arg(locale.toString(metrics.value("originalXP").toInt()));
-    report += QString("<div><b>Кредити за бій (чисті):</b> %1 (%2)</div>")
+    report += QString("<li><b>Кредити за бій (чисті):</b> %1 (%2)</li>")
                   .arg(locale.toString(metrics.value("credits").toInt()))
                   .arg(locale.toString(metrics.value("originalCredits").toInt()));
-    report += QString("<div><b>Вільний досвід:</b> %1</div>").arg(locale.toString(metrics.value("freeXP").toInt()));
-    report += "</div>";
+    report += QString("<li><b>Вільний досвід:</b> %1</li>").arg(locale.toString(metrics.value("freeXP").toInt()));
+    report += "</ul>";
 
     // --- Існуючі блоки аналізу (БЕЗ ЗМІН) ---
     report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Ключові метрики ефективності</h2>";
     if (!metrics.isEmpty()) {
-        report += "<ul style='margin-left:18px;'>";
+        report += "<ul style='margin-left:18px; line-height: 1.65;'>";
         report += QString("<li><b>Точність стрільби:</b> %1</li>").arg(metrics.value("accuracy").toString());
         report += QString("<li><b>Ефективність пробиття:</b> %1</li>").arg(metrics.value("penetrationRatio").toString());
         report += QString("<li><b>Середня шкода за пробиття:</b> %1</li>").arg(metrics.value("avgDmgPerPen").toInt());
@@ -451,7 +449,7 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
     if (performanceGrade.contains("помилка даних")) {
         report += "<p style='color:#ffcc00;'><b>Не вдалося провести детальний аналіз...</b></p>";
     } else if (!behavior.isEmpty()) {
-        report += "<ul style='margin-left:18px;'>";
+        report += "<ul style='margin-left:18px; line-height: 1.65;'>";
         report += QString("<li><b>Оцінка ефективності:</b> %1</li>").arg(performanceGrade);
         report += QString("<li><b>Виконання ролі:</b> %1</li>").arg(behavior.value("rolePerformance").toString());
         QString keySkill = behavior.value("keySkill").toString();
@@ -463,9 +461,9 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
 
     report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Персональні рекомендації</h2>";
     if (!recommendations.isEmpty() && !performanceGrade.contains("помилка даних")) {
-        report += "<ul style='margin-left:18px;'>";
+        report += "<ul style='margin-left:18px; line-height: 1.65;'>";
         for (const QString &rec : recommendations) {
-            report += QString("<li>• %1</li>").arg(rec);
+            report += QString("<li> %1</li>").arg(rec);
         }
         report += "</ul>";
     } else {
@@ -473,7 +471,7 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
     }
 
     report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Хронологія бою</h2>";
-    quint32 recorderEntityId = 0; // Цей ID потрібен для деяких логік, хоча generateTimelineHtml його не використовує
+    quint32 recorderEntityId = 0;
     if (data.contains("vehicles")) {
         QVariantMap vehiclesData = data.value("vehicles").toMap();
         for (auto it = vehiclesData.constBegin(); it != vehiclesData.constEnd(); ++it) {

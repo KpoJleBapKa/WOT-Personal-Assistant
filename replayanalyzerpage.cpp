@@ -321,128 +321,119 @@ void ReplayAnalyzerPage::handleAnalysisFinished() {
     displayStructuredResults(analysisResults);
 }
 
+// replayanalyzerpage.cpp
+
 void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
 {
+    // --- 1. Отримання даних з аналітичних модулів ---
     QString playerName = data.value("playerName").toString();
     QVariantMap metrics = m_metricsCalculator->calculate(data);
     QVariantMap behavior = m_behaviorAnalyzer->analyze(data, metrics);
     QStringList recommendations = m_recommenderSystem->generate(data, metrics, behavior);
 
-    quint32 recorderEntityId = 0;
-    if (data.contains("vehicles")) {
-        QVariantMap vehiclesData = data.value("vehicles").toMap();
-        for (auto it = vehiclesData.constBegin(); it != vehiclesData.constEnd(); ++it) {
-            if (it.value().toMap().value("name").toString() == playerName) {
-                recorderEntityId = it.key().toUInt();
-                break;
-            }
-        }
-    }
-    QMap<quint32, QVariantMap> vehicleIdMap;
-    if (data.contains("vehicles")) {
-        QVariantMap vehiclesData = data.value("vehicles").toMap();
-        for (auto it = vehiclesData.constBegin(); it != vehiclesData.constEnd(); ++it) {
-            bool ok;
-            quint32 vehicleId = it.key().toUInt(&ok);
-            if (ok) {
-                vehicleIdMap.insert(vehicleId, it.value().toMap());
-            }
-        }
-    }
-
+    // --- 2. Початок формування HTML-звіту ---
     QString report;
+    QLocale locale(QLocale::English); // Для форматування чисел (напр., 6,302)
     report += "<div style='font-family:Segoe UI, Roboto, sans-serif; color:#e6eef6;'>";
 
-    // Заголовок
+    // Заголовок (залишається без змін)
     report += "<div style='display:flex; align-items:center; gap:12px;'>"
               "<h1 style='margin:0; font-size:20px;'>📄 Звіт про аналіз реплею</h1>"
               "</div>";
 
+    // Головний контейнер (залишається без змін)
     report += "<div style='margin-top:10px; padding:12px; background:#141414; border:1px solid #2b2b2b; border-radius:8px;'>";
 
-    // Базова інформація
-    report += "<h2 style='margin:6px 0 8px 0; font-size:16px; color:#9fc4ff;'>Базова інформація</h2>";
-    report += "<ul style='margin:0 0 8px 18px;'>";
+    // --- Блок "Базова інформація" (ДОПОВНЕНО) ---
+    report += "<h2 style='margin:6px 0 8px 0; font-size:16px; color:#9fc4ff;'>Загальна інформація про бій</h2>";
+    report += "<ul style='margin:0 0 8px 18px; line-height: 1.65;'>";
 
+    QVariantMap common = data.value("common").toMap();
+    int duration = common.value("duration", 0).toInt();
+    int winnerTeam = common.value("winnerTeam", 0).toInt();
+    int playerTeam = metrics.value("team", 0).toInt();
 
-    QString mapName = data.value("mapDisplayName").toString();
-    QString cleanName = metrics.value("cleanVehicleName").toString();
+    report += QString("<li><b>Гравець:</b> %1</li>").arg(playerName);
+    report += QString("<li><b>Сервер:</b> %1</li>").arg(data.value("serverName", "N/A").toString());
+    report += QString("<li><b>Версія клієнта:</b> %1</li>").arg(data.value("clientVersionFromExe", "N/A").toString());
+    report += QString("<li><b>Карта:</b> %1</li>").arg(data.value("mapDisplayName", "N/A").toString());
+    report += QString("<li><b>Режим гри:</b> %1</li>").arg(data.value("gameplayID", "N/A").toString());
+    report += QString("<li><b>Дата та час бою:</b> %1</li>").arg(data.value("dateTime", "N/A").toString());
+    report += QString("<li><b>Тривалість бою:</b> %1 секунд (%2 хв %3 с)</li>").arg(duration).arg(duration / 60).arg(duration % 60);
+    report += QString("<li><b>Переможець:</b> %1</li>").arg(winnerTeam == 0 ? "Нічия" : "Команда " + QString::number(winnerTeam));
 
-    report += QString("<li><b>Гравець:</b> %1</li>").arg(playerName.isEmpty() ? "Невідомо" : playerName);
-    report += QString("<li><b>Мапа:</b> %1</li>").arg(mapName.isEmpty() ? "Невідомо" : mapName);
-    report += QString("<li><b>Техніка:</b> %1</li>").arg(cleanName.isEmpty() ? data.value("playerVehicle").toString() : cleanName);
-
-    // Результат бою
-    int playerTeam = 0;
-    if (data.contains("vehicles")) {
-        QVariantMap vehiclesData = data.value("vehicles").toMap();
-        for (auto it = vehiclesData.constBegin(); it != vehiclesData.constEnd(); ++it) {
-            QVariantMap vehicleInfo = it.value().toMap();
-            if (vehicleInfo.value("name").toString() == playerName) {
-                playerTeam = vehicleInfo.value("team").toInt();
-                break;
-            }
-        }
-    }
-    if (data.contains("winnerTeam") && playerTeam != 0) {
-        int winnerTeam = data.value("winnerTeam").toInt();
-        QString outcome = "Нічия";
-        if (winnerTeam == playerTeam)
-            outcome = "<span style='color:#88ff88; font-weight:600;'>Перемога</span>";
-        else if (winnerTeam != 0)
-            outcome = "<span style='color:#ff8888; font-weight:600;'>Поразка</span>";
-        report += QString("<li><b>Результат бою:</b> %1</li>").arg(outcome);
-    } else {
-        report += "<li><b>Інформація про результат бою відсутня.</b></li>";
+    // Додаємо результат конкретного гравця
+    if (winnerTeam != 0 && playerTeam != 0) {
+        QString outcome = (winnerTeam == playerTeam)
+        ? "<span style='color:#88ff88; font-weight:600;'>Перемога</span>"
+        : "<span style='color:#ff8888; font-weight:600;'>Поразка</span>";
+        report += QString("<li><b>Результат гравця:</b> %1</li>").arg(outcome);
     }
     report += "</ul>";
 
 
-    // 🟦 Результати гравця — назви та значення розділено на окремі блоки
+    // --- Блок "Результати гравця" з великими картками (БЕЗ ЗМІН) ---
     report += "<h2 style='margin: 16px 0 12px 0; font-size: 18px; color: #9fc4ff;'>Результати гравця</h2>";
     report += "<div style='display: flex; flex-direction: column; gap: 36px; align-items: flex-start;'>";
-
     auto appendMetricSeparated = [&](const QString &label, const QString &value, const QString &color = "#ffffff") {
-        // 🏷️ Назва — окремий блок
-        report += QString(
-                      "<div style='font-size: 17px; font-weight: 600; color: #cfd9ff; "
-                      "background: #181818; padding: 8px 14px; border-radius: 8px; "
-                      "display: inline-block; box-shadow: 0 0 6px rgba(0,0,0,0.5);'>%1:</div>"
-                      ).arg(label);
-
-        // 🔢 Значення — окремий блок нижче
-        report += QString(
-                      "<div style='font-size: 40px; font-weight: 800; color: %1; "
-                      "background: #0f0f0f; padding: 14px 28px; border-radius: 12px; "
-                      "margin-top: 6px; margin-bottom: 12px; display: inline-block; "
-                      "box-shadow: inset 0 0 10px rgba(0,0,0,0.7); text-align: center;'>%2</div>"
-                      ).arg(color, value);
+        report += QString("<div style='font-size: 17px; font-weight: 600; color: #cfd9ff; background: #181818; padding: 8px 14px; border-radius: 8px; display: inline-block; box-shadow: 0 0 6px rgba(0,0,0,0.5);'>%1:</div>").arg(label);
+        report += QString("<div style='font-size: 40px; font-weight: 800; color: %1; background: #0f0f0f; padding: 14px 28px; border-radius: 12px; margin-top: 6px; margin-bottom: 12px; display: inline-block; box-shadow: inset 0 0 10px rgba(0,0,0,0.7); text-align: center;'>%2</div>").arg(color, value);
     };
-
-    // 🟡 Додаємо кожну метрику окремо
-    appendMetricSeparated("Нанесено шкоди", QString::number(qRound(metrics.value("totalDamageDealt", 0.0).toDouble())), "#ffd166");
-    appendMetricSeparated("Знищено", QString::number(qRound(metrics.value("kills", 0.0).toDouble())), "#ff7b7b");
-    appendMetricSeparated("Допомога команді", QString::number(qRound(metrics.value("damageAssisted", 0.0).toDouble())), "#7be495");
-    appendMetricSeparated("Заблоковано шкоди", QString::number(qRound(metrics.value("damageBlockedByArmor", 0.0).toDouble())), "#a0aaff");
-
+    appendMetricSeparated("Нанесено шкоди", locale.toString(metrics.value("totalDamageDealt", 0.0).toInt()), "#ffd166");
+    appendMetricSeparated("Знищено", QString::number(metrics.value("kills", 0.0).toInt()), "#ff7b7b");
+    appendMetricSeparated("Допомога команді", locale.toString(metrics.value("damageAssisted", 0.0).toInt()), "#7be495");
+    appendMetricSeparated("Заблоковано шкоди", locale.toString(metrics.value("damageBlockedByArmor", 0.0).toInt()), "#a0aaff");
     report += "</div>";
 
 
+    // --- Блок "Інші показники" (ДОПОВНЕНО НОВИМИ ПОЛЯМИ) ---
+    report += "<div style='margin-top:12px; line-height: 1.7;'>";
 
+    // Додаємо деталі про гравця: Клан, Команда, Статус
+    QString clanAbbrev = "Немає";
+    QVariantMap vehicles = data.value("vehicles").toMap();
+    for (auto it = vehicles.constBegin(); it != vehicles.constEnd(); ++it) {
+        if (it.value().toMap().value("name").toString() == playerName) {
+            QString clan = it.value().toMap().value("clanAbbrev").toString();
+            if (!clan.isEmpty()) clanAbbrev = clan;
+            break;
+        }
+    }
+    QString status = metrics.value("deathReason", -1).toInt() == -1
+                         ? QString("<span style='color:#88ff88;'>Вижив</span> (залишилося %1 HP)").arg(metrics.value("health").toInt())
+                         : "<span style='color:#ff8888;'>Знищено</span>";
+    report += QString("<div><b>Клан:</b> %1 &nbsp;&nbsp; <b>Команда:</b> %2 &nbsp;&nbsp; <b>Статус:</b> %1</div>").arg(clanAbbrev, QString::number(playerTeam), status);
 
-
-    // Інші показники
-    report += "<div style='margin-top:12px;'>";
+    // Додаємо блок "Бойова ефективність"
+    report += "<h3 style='margin:16px 0 8px 0; font-size:14px; color:#dfe8f8;'>Бойова ефективність</h3>";
     report += QString("<div><b>Постріли / Влучання / Пробиття:</b> %1 / %2 / %3</div>")
-                  .arg(qRound(metrics.value("shots", 0.0).toDouble()))
-                  .arg(qRound(metrics.value("hits", 0.0).toDouble()))
-                  .arg(qRound(metrics.value("piercings", 0.0).toDouble()));
-    report += QString("<div><b>Досвід:</b> %1  &nbsp; <b>Кредити:</b> %2</div>")
-                  .arg(qRound(metrics.value("xp", 0.0).toDouble()))
-                  .arg(qRound(metrics.value("credits", 0.0).toDouble()));
+                  .arg(metrics.value("shots", 0.0).toInt())
+                  .arg(metrics.value("hits", 0.0).toInt())
+                  .arg(metrics.value("piercings", 0.0).toInt());
+    report += QString("<div><b>Потенційно отримана шкода:</b> %1</div>").arg(locale.toString(metrics.value("potentialDamageReceived").toInt()));
+    report += QString("<div><b>Виявлено ворогів:</b> %1</div>").arg(metrics.value("spotted").toInt());
+
+    // Формуємо рядок з досягненнями
+    QString achievementsText;
+    int masteryMark = metrics.value("markOfMastery").toInt();
+    if (masteryMark > 0 && masteryMark < 4) achievementsText += QString("Знак класності %1, ").arg(masteryMark);
+    if (metrics.value("isFirstBlood").toBool()) achievementsText += "\"Перша кров\", ";
+    if (metrics.value("marksOnGun").toInt() > 0) achievementsText += QString("%1 відмітк(а/и) на стволі, ").arg(metrics.value("marksOnGun").toInt());
+    achievementsText += QString("%1 інш. досягнень").arg(metrics.value("achievementsCount").toInt());
+    report += QString("<div><b>Досягнення:</b> %1</div>").arg(achievementsText);
+
+    // Додаємо блок "Економіка та досвід"
+    report += "<h3 style='margin:16px 0 8px 0; font-size:14px; color:#dfe8f8;'>Економіка та досвід</h3>";
+    report += QString("<div><b>Досвід за бій (чистий):</b> %1 (%2)</div>")
+                  .arg(locale.toString(metrics.value("xp").toInt()))
+                  .arg(locale.toString(metrics.value("originalXP").toInt()));
+    report += QString("<div><b>Кредити за бій (чисті):</b> %1 (%2)</div>")
+                  .arg(locale.toString(metrics.value("credits").toInt()))
+                  .arg(locale.toString(metrics.value("originalCredits").toInt()));
+    report += QString("<div><b>Вільний досвід:</b> %1</div>").arg(locale.toString(metrics.value("freeXP").toInt()));
     report += "</div>";
 
-    // 📊 Ключові метрики
+    // --- Існуючі блоки аналізу (БЕЗ ЗМІН) ---
     report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Ключові метрики ефективності</h2>";
     if (!metrics.isEmpty()) {
         report += "<ul style='margin-left:18px;'>";
@@ -455,11 +446,10 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
         report += "<p style='color:#ffd966;'>Недостатньо даних для розрахунку ключових метрик.</p>";
     }
 
-    // 🧠 Аналіз поведінки
     report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Аналіз ігрової поведінки</h2>";
     QString performanceGrade = behavior.value("performanceGrade").toString();
     if (performanceGrade.contains("помилка даних")) {
-        report += "<p style='color:#ffcc00;'><b>Не вдалося провести детальний аналіз:</b> танк не знайдено у внутрішній базі даних. Відображено базові показники.</p>";
+        report += "<p style='color:#ffcc00;'><b>Не вдалося провести детальний аналіз...</b></p>";
     } else if (!behavior.isEmpty()) {
         report += "<ul style='margin-left:18px;'>";
         report += QString("<li><b>Оцінка ефективності:</b> %1</li>").arg(performanceGrade);
@@ -469,11 +459,8 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
             report += QString("<li><b>Ключовий навик у бою:</b> %1</li>").arg(keySkill);
         }
         report += "</ul>";
-    } else {
-        report += "<p style='color:#c0cbdc;'>Недостатньо даних для аналізу поведінки.</p>";
     }
 
-    // 📌 Рекомендації
     report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Персональні рекомендації</h2>";
     if (!recommendations.isEmpty() && !performanceGrade.contains("помилка даних")) {
         report += "<ul style='margin-left:18px;'>";
@@ -481,17 +468,25 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
             report += QString("<li>• %1</li>").arg(rec);
         }
         report += "</ul>";
-    } else if (performanceGrade.contains("помилка даних")) {
-        report += "<p style='color:#ffb3b3;'>Рекомендації не можуть бути сформовані — танк не знайдено у базі даних.</p>";
     } else {
         report += "<p style='color:#c0cbdc;'>Рекомендації не сформовано.</p>";
     }
 
     report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Хронологія бою</h2>";
-    report += generateTimelineHtml(data, recorderEntityId); // Замість vehicleIdMap
+    quint32 recorderEntityId = 0; // Цей ID потрібен для деяких логік, хоча generateTimelineHtml його не використовує
+    if (data.contains("vehicles")) {
+        QVariantMap vehiclesData = data.value("vehicles").toMap();
+        for (auto it = vehiclesData.constBegin(); it != vehiclesData.constEnd(); ++it) {
+            if (it.value().toMap().value("name").toString() == playerName) {
+                recorderEntityId = it.key().toUInt();
+                break;
+            }
+        }
+    }
+    report += generateTimelineHtml(data, recorderEntityId);
 
-    report += "</div>"; // container
-    report += "</div>";
+    report += "</div>"; // Закриття головного контейнера
+    report += "</div>"; // Закриття обгортки
 
     m_resultsTextEdit->clear();
     m_resultsTextEdit->setHtml(report);
@@ -499,94 +494,107 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
 
 QString ReplayAnalyzerPage::generateTimelineHtml(const QVariantMap &data, quint32 recorderEntityId)
 {
-    if (recorderEntityId == 0 || !data.contains("shot_events")) {
-        return "<p style='color:#c0cbdc;'><i>Дані для хронології відсутні.</i></p>";
+    Q_UNUSED(recorderEntityId); // Ми можемо отримати ім'я гравця напряму
+
+    if (!data.contains("shot_events")) {
+        return "<p style='color:#c0cbdc;'><i>Детальний звіт про постріли не знайдено в цьому реплеї.</i></p>";
     }
 
     QVariantList shotEvents = data.value("shot_events").toList();
     if (shotEvents.isEmpty()) {
-        return "<p style='color:#c0cbdc;'><i>У цьому бою не було зафіксовано подій пострілів.</i></p>";
+        return "<p style='color:#c0cbdc;'><i>У цьому бою не зафіксовано жодної події, що завдала шкоди.</i></p>";
     }
 
     QString html;
     html += R"(
         <style>
             .timeline-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-            .timeline-table th, .timeline-table td { padding: 6px 8px; text-align: left; border-bottom: 1px solid #2f2f2f; }
-            .timeline-table th { color: #aabfff; font-weight: 600; }
+            .timeline-table th, .timeline-table td { padding: 7px 9px; text-align: left; border-bottom: 1px solid #2f2f2f; }
+            .timeline-table th { color: #aabfff; font-weight: 600; background-color: #222; }
             .timeline-table tr:last-child td { border-bottom: none; }
-            .dealt { color: #ffd166; } .dealt .icon { color: #ffd166; }
-            .received { color: #ff8e8e; } .received .icon { color: #ff8e8e; }
-            .no-damage { color: #909090; }
-            .friendly-fire { background-color: rgba(255, 80, 80, 0.1); }
-            .crit { color: #ffb366; font-style: italic; font-size: 11px; }
-            .icon { font-size: 14px; margin-right: 5px; }
+            .timeline-table tr:hover { background-color: #2a2a2a; }
+            .damage-dealt { color: #ffd166; font-weight: 600; }
+            .damage-received { color: #ff8888; font-weight: 600; }
+            .no-damage { color: #888; }
+            .friendly-fire { background-color: #4b1f1f; }
+            .crit { font-style: italic; color: #ffb3b3; }
+            .kill { font-weight: bold; color: #ff7b7b; }
         </style>
     )";
     html += "<table class='timeline-table'>";
-    html += "<thead><tr><th>Час</th><th>Подія</th><th style='text-align:right;'>Результат</th></tr></thead><tbody>";
+    html += "<thead><tr><th>Час</th><th>Атакуючий</th><th>Ціль</th><th style='text-align:right;'>Шкода</th><th>Результат</th></tr></thead><tbody>";
 
-    for (const QVariant &eventVar : shotEvents) {
-        QVariantMap event = eventVar.toMap();
-        quint32 attackerId = event.value("attackerId").toUInt();
-        quint32 targetId = event.value("targetId").toUInt();
+    // Отримуємо ім'я гравця, чий реплей ми дивимося
+    QString mainPlayerName = data.value("playerName").toString();
 
-        // Фільтруємо події: нас цікавлять лише ті, де наш гравець - учасник
-        if (attackerId != recorderEntityId && targetId != recorderEntityId) {
-            continue;
-        }
+    for (const QVariant &shotVar : shotEvents) {
+        QVariantMap shot = shotVar.toMap();
 
-        // --- Форматування даних ---
-        float timestamp = event.value("timestamp").toFloat();
-        int minutes = static_cast<int>(timestamp) / 60;
-        int seconds = static_cast<int>(timestamp) % 60;
+        float timestamp = shot.value("timestamp").toFloat();
+        QString attackerName = shot.value("attackerName").toString();
+        QString targetName = shot.value("targetName").toString();
+        int damage = shot.value("damage").toInt();
+        bool isFriendlyFire = shot.value("isFriendlyFire").toBool();
+        QStringList criticalHits = shot.value("criticalHits").toStringList();
+
+        // Форматуємо час
+        int totalSeconds = qRound(timestamp);
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
         QString timeStr = QString("%1:%2").arg(minutes, 2, 10, QChar('0')).arg(seconds, 2, 10, QChar('0'));
 
-        QString attackerName = event.value("attackerName").toString();
-        QString targetName = event.value("targetName").toString();
-        qint16 damage = event.value("damage").toInt();
-        QStringList crits = event.value("criticalHits").toStringList();
+        // Формуємо опис результату
+        QString resultDesc;
+        if (shot.value("isPenetration").toBool()) resultDesc += "Пробиття";
+        else if (shot.value("isRicochet").toBool()) resultDesc += "Рикошет";
+        else if (shot.value("isShellExplosion").toBool()) resultDesc += "Сплеш";
+        else if (shot.value("isNoDamage").toBool()) resultDesc += "Без шкоди";
+        else resultDesc += "Влучання";
 
-        QString rowClass, description, result;
-
-        // --- Визначаємо напрямок дії та стиль ---
-        if (attackerId == recorderEntityId) { // Ми атакуємо
-            rowClass = "dealt";
-            description = QString("Ви → <b>%1</b>").arg(targetName);
-        } else { // Нас атакують
-            rowClass = "received";
-            description = QString("<b>%1</b> → Вас").arg(attackerName);
+        bool isKill = false;
+        if (!criticalHits.isEmpty()) {
+            QStringList cleanCrits;
+            for (const QString &crit : criticalHits) {
+                if (crit == "знищено") {
+                    isKill = true;
+                } else {
+                    cleanCrits.append(crit);
+                }
+            }
+            if (!cleanCrits.isEmpty()) {
+                resultDesc += QString(" <span class='crit'>(%1)</span>").arg(cleanCrits.join(", "));
+            }
+        }
+        if (isKill) {
+            resultDesc += " <span class='kill'>ЗНИЩЕНО!</span>";
         }
 
-        if (event.value("isFriendlyFire").toBool()) {
-            rowClass += " friendly-fire";
-            description += " <span style='color:#ff5555;'>(Союзник!)</span>";
-        }
+        // Визначаємо клас для рядка та шкоди
+        QString rowClass;
+        if (isFriendlyFire) rowClass = "friendly-fire";
 
-        // --- Формуємо результат події ---
+        QString damageClass;
         if (damage > 0) {
-            result = QString("<span class='icon'>🎯</span><b>%1</b>").arg(damage);
+            if (attackerName == mainPlayerName) damageClass = "damage-dealt";
+            else if (targetName == mainPlayerName) damageClass = "damage-received";
         } else {
-            rowClass += " no-damage";
-            if (event.value("isRicochet").toBool()) result = "<span class='icon'>튕</span>Рикошет";
-            else if (!event.value("isPenetration").toBool()) result = "<span class='icon'>🛡️</span>Не пробито";
-            else result = "<span class='icon'>✋</span>Без шкоди";
+            damageClass = "no-damage";
         }
 
-        if (!crits.isEmpty()) {
-            result += QString("<br><span class='crit'>%1</span>").arg(crits.join(", "));
-        }
-
-        // --- Збираємо рядок таблиці ---
-        html += QString("<tr class='%1'><td>%2</td><td>%3</td><td style='text-align:right;'>%4</td></tr>")
-                    .arg(rowClass, timeStr, description, result);
+        html += QString("<tr class='%1'><td>%2</td><td>%3</td><td>%4</td><td style='text-align:right;' class='%5'>%6</td><td>%7</td></tr>")
+                    .arg(rowClass,
+                         timeStr,
+                         attackerName,
+                         targetName,
+                         damageClass,
+                         QString::number(damage),
+                         resultDesc);
     }
 
     html += "</tbody></table>";
     return html;
 }
 
-// Delete selected replay (UI + try remove from DB)
 void ReplayAnalyzerPage::onDeleteSelectedClicked()
 {
     auto *item = m_replayList->currentItem();

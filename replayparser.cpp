@@ -216,7 +216,6 @@ QStringList decodeCriticalFlags(quint32 flags) {
     }
     return crits;
 }
-
 void ReplayParser::parsePackets(const QByteArray &stream, QVariantMap &out_data)
 {
     qDebug() << "Починаємо детальний парсинг пакетів...";

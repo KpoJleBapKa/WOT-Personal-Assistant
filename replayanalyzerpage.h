@@ -44,6 +44,8 @@ private:
     QString cleanVehicleName(const QString &technicalName);
     //QString generateTimelineHtml(const QVariantMap &data, const QMap<quint32, QVariantMap> &vehicleIdMap);
     QString generateTimelineHtml(const QVariantMap &data, quint32 recorderEntityId);
+    QString findReplaysFolder();
+    QString m_replaysFolderPath;
 
     // UI
     QPushButton *m_selectFileButton;

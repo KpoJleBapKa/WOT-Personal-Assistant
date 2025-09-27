@@ -23,6 +23,7 @@
 #include <QRandomGenerator>
 #include <QDir>
 #include <QMetaObject>
+#include <QStorageInfo>
 
 ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *parent)
     : QWidget(parent), m_dbManager(dbManager)
@@ -173,6 +174,8 @@ ReplayAnalyzerPage::ReplayAnalyzerPage(DatabaseManager *dbManager, QWidget *pare
     connect(m_deleteSelectedButton, &QPushButton::clicked, this, &ReplayAnalyzerPage::onDeleteSelectedClicked);
     connect(m_exportPdfButton, &QPushButton::clicked, this, &ReplayAnalyzerPage::onExportPdfClicked);
 
+    m_replaysFolderPath = findReplaysFolder();
+
     // Load cached
     loadCachedReplays();
 }
@@ -194,10 +197,17 @@ QString ReplayAnalyzerPage::cleanVehicleName(const QString &technicalName)
 
 // -------------------- UI / interaction methods --------------------
 
-void ReplayAnalyzerPage::onSelectFileButtonClicked() {
-    QString filePath = QFileDialog::getOpenFileName(this, "Вибрати реплей", "", "World of Tanks Replays (*.wotreplay)");
-    if (filePath.isEmpty()) return;
+void ReplayAnalyzerPage::onSelectFileButtonClicked()
+{
+    // Тепер метод просто використовує вже знайдений шлях
+    QString filePath = QFileDialog::getOpenFileName(this,
+                                                    "Вибрати реплей",
+                                                    m_replaysFolderPath,
+                                                    "World of Tanks Replays (*.wotreplay)");
+    if (filePath.isEmpty())
+        return;
 
+    // Решта логіки залишається без змін
     QFileInfo fileInfo(filePath);
 
     for (int i = 0; i < m_replayList->count(); ++i) {
@@ -660,4 +670,34 @@ void ReplayAnalyzerPage::onClearReplaysButtonClicked() {
         m_resultsTextEdit->setPlainText("Виберіть реплей зі списку або завантажте новий, щоб побачити результати аналізу.");
         QMessageBox::information(this, "Готово", "Список реплеїв та кеш аналізу очищено.");
     }
+}
+
+QString ReplayAnalyzerPage::findReplaysFolder()
+{
+    QList<QStorageInfo> drives = QStorageInfo::mountedVolumes();
+
+    for (const auto& drive : drives) {
+        if (!drive.isReady() || drive.isReadOnly()) {
+            continue;
+        }
+
+        // Шукаємо папку "World_of_Tanks_EU" в корені диска
+        QDir rootDir(drive.rootPath());
+        QStringList entries = rootDir.entryList({"World_of_Tanks_EU"}, QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name | QDir::IgnoreCase);
+
+        if (!entries.isEmpty()) {
+            // Якщо знайшли, формуємо шлях до папки 'replays'
+            QString replaysPath = drive.rootPath() + entries.first() + "/replays";
+
+            // Перевіряємо, чи папка 'replays' дійсно існує
+            if (QDir(replaysPath).exists()) {
+                qDebug() << "Знайдено папку з реплеями:" << replaysPath;
+                return replaysPath; // Повертаємо перший знайдений шлях
+            }
+        }
+    }
+
+    qDebug() << "Папку з реплеями не знайдено, буде використано стандартний шлях.";
+    // Якщо нічого не знайшли, повертаємо домашню директорію користувача
+    return QDir::homePath();
 }

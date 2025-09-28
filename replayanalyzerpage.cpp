@@ -359,7 +359,7 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
     report += "<ul style='margin:0 0 8px 18px; line-height: 1.65;'>";
 
     QVariantMap common = data.value("common").toMap();
-    int duration = common.value("duration", 0).toInt();
+    Q_UNUSED(common.value("duration", 0).toInt()); // duration не використовується
     int winnerTeam = common.value("winnerTeam", 0).toInt();
     int playerTeam = metrics.value("team", 0).toInt();
 
@@ -454,19 +454,256 @@ void ReplayAnalyzerPage::displayStructuredResults(const QVariantMap &data)
         report += "<p style='color:#ffd966;'>Недостатньо даних для розрахунку ключових метрик.</p>";
     }
 
-    report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Аналіз ігрової поведінки</h2>";
+    report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Детальний аналіз ігрової поведінки</h2>";
     QString performanceGrade = behavior.value("performanceGrade").toString();
     if (performanceGrade.contains("помилка даних")) {
         report += "<p style='color:#ffcc00;'><b>Не вдалося провести детальний аналіз...</b></p>";
     } else if (!behavior.isEmpty()) {
+        // Базова оцінка
+        report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>Загальна оцінка</h3>";
         report += "<ul style='margin-left:18px; line-height: 1.65;'>";
         report += QString("<li><b>Оцінка ефективності:</b> %1</li>").arg(performanceGrade);
-        report += QString("<li><b>Виконання ролі:</b> %1</li>").arg(behavior.value("rolePerformance").toString());
-        QString keySkill = behavior.value("keySkill").toString();
-        if (!keySkill.isEmpty() && keySkill != "Не визначено") {
-            report += QString("<li><b>Ключовий навик у бою:</b> %1</li>").arg(keySkill);
-        }
+        report += QString("<li><b>Детальний опис поведінки:</b> %1</li>").arg(behavior.value("detailedBehavior").toString());
         report += "</ul>";
+
+        // Розширені тактичні паттерни
+        if (behavior.contains("advancedTacticalPatterns")) {
+            QVariantMap tactics = behavior.value("advancedTacticalPatterns").toMap();
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>🎯 Розширені тактичні паттерни</h3>";
+            report += "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-left: 18px;'>";
+            report += QString("<div><b>Агресивність:</b> %1</div>").arg(tactics.value("aggressiveness").toString());
+            report += QString("<div><b>Оборонність:</b> %1</div>").arg(tactics.value("defensiveness").toString());
+            report += QString("<div><b>Підтримка команди:</b> %1</div>").arg(tactics.value("supportiveness").toString());
+            report += QString("<div><b>Позиціонування:</b> %1</div>").arg(tactics.value("positioning").toString());
+            report += QString("<div><b>Контроль карти:</b> %1</div>").arg(tactics.value("mapControl").toString());
+            report += QString("<div><b>Ініціатива:</b> %1</div>").arg(tactics.value("initiative").toString());
+            report += QString("<div><b>Адаптивність:</b> %1</div>").arg(tactics.value("adaptability").toString());
+            report += QString("<div><b>Схильність до ризику:</b> %1</div>").arg(tactics.value("riskTaking").toString());
+            report += QString("<div><b>Терпіння:</b> %1</div>").arg(tactics.value("patience").toString());
+            report += QString("<div><b>Прийняття рішень:</b> %1</div>").arg(tactics.value("decisionMaking").toString());
+            report += QString("<div><b>Управління ресурсами:</b> %1</div>").arg(tactics.value("resourceManagement").toString());
+            report += QString("<div><b>Ситуаційна обізнаність:</b> %1</div>").arg(tactics.value("situationalAwareness").toString());
+            report += "</div>";
+        }
+
+        // Ефективність ролей
+        if (behavior.contains("roleEffectiveness")) {
+            QVariantMap roles = behavior.value("roleEffectiveness").toMap();
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>Ефективність ролей</h3>";
+            report += "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-left: 18px;'>";
+            report += QString("<div><b>Дамаг-ділер:</b> %1</div>").arg(roles.value("damageDealer").toString());
+            report += QString("<div><b>Розвідник:</b> %1</div>").arg(roles.value("scout").toString());
+            report += QString("<div><b>Підтримка:</b> %1</div>").arg(roles.value("support").toString());
+            report += QString("<div><b>Танк:</b> %1</div>").arg(roles.value("tank").toString());
+            report += QString("<div><b>Снайпер:</b> %1</div>").arg(roles.value("sniper").toString());
+            report += QString("<div><b>Ближній бій:</b> %1</div>").arg(roles.value("brawler").toString());
+            report += "</div>";
+        }
+
+        // Часовий аналіз
+        if (behavior.contains("timeBasedAnalysis")) {
+            QVariantMap timeAnalysis = behavior.value("timeBasedAnalysis").toMap();
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>Часовий аналіз</h3>";
+            report += "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-left: 18px;'>";
+            report += QString("<div><b>Рання гра:</b> %1</div>").arg(timeAnalysis.value("earlyGame").toString());
+            report += QString("<div><b>Середина гри:</b> %1</div>").arg(timeAnalysis.value("midGame").toString());
+            report += QString("<div><b>Кінець гри:</b> %1</div>").arg(timeAnalysis.value("lateGame").toString());
+            report += QString("<div><b>Вирішальні моменти:</b> %1</div>").arg(timeAnalysis.value("clutchFactor").toString());
+            report += "</div>";
+        }
+
+        // Бойова ефективність
+        if (behavior.contains("combatEfficiency")) {
+            QVariantMap combat = behavior.value("combatEfficiency").toMap();
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>Бойова ефективність</h3>";
+            report += "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-left: 18px;'>";
+            report += QString("<div><b>Точність:</b> %1</div>").arg(combat.value("accuracy").toString());
+            report += QString("<div><b>Частота пробиттів:</b> %1</div>").arg(combat.value("penetrationRate").toString());
+            report += QString("<div><b>Шкода за постріл:</b> %1</div>").arg(combat.value("damagePerShot").toString());
+            report += QString("<div><b>Виживаність:</b> %1</div>").arg(combat.value("survivalRate").toString());
+            report += QString("<div><b>Ефективність знищення:</b> %1</div>").arg(combat.value("killEfficiency").toString());
+            report += QString("<div><b>Ефективність допомоги:</b> %1</div>").arg(combat.value("assistEfficiency").toString());
+            report += "</div>";
+        }
+
+        // Командна взаємодія
+        if (behavior.contains("teamInteraction")) {
+            QVariantMap team = behavior.value("teamInteraction").toMap();
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>Командна взаємодія</h3>";
+            report += "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-left: 18px;'>";
+            report += QString("<div><b>Комунікація:</b> %1</div>").arg(team.value("communication").toString());
+            report += QString("<div><b>Координація:</b> %1</div>").arg(team.value("coordination").toString());
+            report += QString("<div><b>Лідерство:</b> %1</div>").arg(team.value("leadership").toString());
+            report += QString("<div><b>Адаптивність:</b> %1</div>").arg(team.value("adaptability").toString());
+            report += "</div>";
+        }
+
+        // Слабкі місця та рекомендації
+        if (behavior.contains("weaknessAnalysis")) {
+            QVariantMap weaknesses = behavior.value("weaknessAnalysis").toMap();
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>Аналіз слабких місць</h3>";
+            report += "<ul style='margin-left:18px; line-height: 1.65;'>";
+            report += QString("<li><b>Загальна оцінка:</b> %1</li>").arg(weaknesses.value("overallRating").toString());
+            
+            QStringList primaryWeaknesses = weaknesses.value("primaryWeaknesses").toStringList();
+            if (!primaryWeaknesses.isEmpty()) {
+                report += "<li><b>Основні слабкі місця:</b></li>";
+                report += "<ul style='margin-left: 20px;'>";
+                for (const QString &weakness : primaryWeaknesses) {
+                    report += QString("<li>%1</li>").arg(weakness);
+                }
+                report += "</ul>";
+            }
+            
+            QStringList secondaryWeaknesses = weaknesses.value("secondaryWeaknesses").toStringList();
+            if (!secondaryWeaknesses.isEmpty()) {
+                report += "<li><b>Другорядні слабкі місця:</b></li>";
+                report += "<ul style='margin-left: 20px;'>";
+                for (const QString &weakness : secondaryWeaknesses) {
+                    report += QString("<li>%1</li>").arg(weakness);
+                }
+                report += "</ul>";
+            }
+            
+            QStringList improvementAreas = weaknesses.value("improvementAreas").toStringList();
+            if (!improvementAreas.isEmpty()) {
+                report += "<li><b>Рекомендації для покращення:</b></li>";
+                report += "<ul style='margin-left: 20px;'>";
+                for (const QString &suggestion : improvementAreas) {
+                    report += QString("<li>%1</li>").arg(suggestion);
+                }
+                report += "</ul>";
+            }
+            report += "</ul>";
+        }
+
+        // Поведінкові інсайти
+        if (behavior.contains("behavioralInsights")) {
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>Поведінкові інсайти</h3>";
+            report += QString("<p style='margin-left:18px; line-height: 1.65;'>%1</p>").arg(behavior.value("behavioralInsights").toString());
+        }
+
+        // Розширена бойова ефективність
+        if (behavior.contains("advancedCombatEfficiency")) {
+            QVariantMap combat = behavior.value("advancedCombatEfficiency").toMap();
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>⚔️ Розширена бойова ефективність</h3>";
+            report += "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-left: 18px;'>";
+            report += QString("<div><b>Точність стрільби:</b> %1</div>").arg(combat.value("accuracy").toString());
+            report += QString("<div><b>Частота пробиттів:</b> %1</div>").arg(combat.value("penetrationRate").toString());
+            report += QString("<div><b>Шкода за постріл:</b> %1</div>").arg(combat.value("damagePerShot").toString());
+            report += QString("<div><b>Частота виживання:</b> %1</div>").arg(combat.value("survivalRate").toString());
+            report += QString("<div><b>Ефективність знищення:</b> %1</div>").arg(combat.value("killEfficiency").toString());
+            report += QString("<div><b>Ефективність допомоги:</b> %1</div>").arg(combat.value("assistEfficiency").toString());
+            report += QString("<div><b>Вибір цілей:</b> %1</div>").arg(combat.value("targetSelection").toString());
+            report += QString("<div><b>Таймінг атак:</b> %1</div>").arg(combat.value("timing").toString());
+            report += QString("<div><b>Ефективність боєприпасів:</b> %1</div>").arg(combat.value("ammoEfficiency").toString());
+            report += QString("<div><b>Частота критичних ударів:</b> %1</div>").arg(combat.value("criticalHitRate").toString());
+            report += QString("<div><b>Пошкодження модулів:</b> %1</div>").arg(combat.value("moduleDamage").toString());
+            report += QString("<div><b>Пошкодження екіпажу:</b> %1</div>").arg(combat.value("crewDamage").toString());
+            report += QString("<div><b>Швидкість стрільби:</b> %1</div>").arg(combat.value("fireRate").toString());
+            report += QString("<div><b>Ефективність перезарядки:</b> %1</div>").arg(combat.value("reloadEfficiency").toString());
+            report += "</div>";
+        }
+
+        // Командна синергія
+        if (behavior.contains("teamSynergy")) {
+            QVariantMap team = behavior.value("teamSynergy").toMap();
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>🤝 Командна синергія</h3>";
+            report += "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-left: 18px;'>";
+            report += QString("<div><b>Координація:</b> %1</div>").arg(team.value("coordination").toString());
+            report += QString("<div><b>Комунікація:</b> %1</div>").arg(team.value("communication").toString());
+            report += QString("<div><b>Лідерство:</b> %1</div>").arg(team.value("leadership").toString());
+            report += QString("<div><b>Адаптивність:</b> %1</div>").arg(team.value("adaptability").toString());
+            report += QString("<div><b>Гнучкість ролей:</b> %1</div>").arg(team.value("roleFlexibility").toString());
+            report += QString("<div><b>Готовність підтримати:</b> %1</div>").arg(team.value("supportReadiness").toString());
+            report += QString("<div><b>Ініціатива в команді:</b> %1</div>").arg(team.value("initiative").toString());
+            report += QString("<div><b>Вирішення конфліктів:</b> %1</div>").arg(team.value("conflictResolution").toString());
+            report += QString("<div><b>Обмін ресурсами:</b> %1</div>").arg(team.value("resourceSharing").toString());
+            report += QString("<div><b>Тактична обізнаність:</b> %1</div>").arg(team.value("tacticalAwareness").toString());
+            report += "</div>";
+        }
+
+        // Аналіз карти
+        if (behavior.contains("mapAnalysis")) {
+            QVariantMap mapAnalysis = behavior.value("mapAnalysis").toMap();
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>🗺️ Аналіз карти</h3>";
+            report += "<ul style='margin-left:18px; line-height: 1.65;'>";
+            report += QString("<li><b>Назва карти:</b> %1</li>").arg(mapAnalysis.value("mapName").toString());
+            report += QString("<li><b>Тип карти:</b> %1</li>").arg(mapAnalysis.value("mapType").toString());
+            report += QString("<li><b>Ефективність на карті:</b> %1</li>").arg(mapAnalysis.value("effectiveness").toString());
+            report += QString("<li><b>Улюблена зона:</b> %1</li>").arg(mapAnalysis.value("preferredZone").toString());
+            report += QString("<li><b>Середня позиція:</b> %1</li>").arg(mapAnalysis.value("averagePosition").toString());
+            report += "</ul>";
+        }
+
+        // Позиціонування
+        if (behavior.contains("positioning")) {
+            QVariantMap positioning = behavior.value("positioning").toMap();
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>📍 Позиціонування</h3>";
+            report += "<ul style='margin-left:18px; line-height: 1.65;'>";
+            report += QString("<li><b>Координати:</b> X: %1, Y: %2, Z: %3</li>")
+                      .arg(positioning.value("x").toString())
+                      .arg(positioning.value("y").toString())
+                      .arg(positioning.value("z").toString());
+            report += QString("<li><b>Відстань до ворогів:</b> %1 м</li>").arg(positioning.value("distanceToEnemies").toString());
+            report += QString("<li><b>Відстань до союзників:</b> %1 м</li>").arg(positioning.value("distanceToAllies").toString());
+            report += QString("<li><b>Позиція на карті:</b> %1</li>").arg(positioning.value("mapPosition").toString());
+            report += QString("<li><b>Зона карти:</b> %1</li>").arg(positioning.value("zone").toString());
+            report += QString("<li><b>Використання покриття:</b> %1</li>").arg(positioning.value("coverUsage").toString());
+            report += QString("<li><b>Мобільність:</b> %1</li>").arg(positioning.value("mobility").toString());
+            report += "</ul>";
+        }
+
+        // Машинне навчання
+        if (behavior.contains("machineLearning")) {
+            QVariantMap ml = behavior.value("machineLearning").toMap();
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>🤖 Машинне навчання</h3>";
+            report += "<ul style='margin-left:18px; line-height: 1.65;'>";
+            report += QString("<li><b>Точність прогнозування:</b> %1</li>").arg(ml.value("predictionAccuracy").toString());
+            QStringList importantFeatures = ml.value("importantFeatures").toStringList();
+            if (!importantFeatures.isEmpty()) {
+                report += "<li><b>Найважливіші ознаки:</b> " + importantFeatures.join(", ") + "</li>";
+            }
+            report += "</ul>";
+        }
+
+        // Порівняння з історичними даними
+        if (behavior.contains("historicalComparison")) {
+            QVariantMap historical = behavior.value("historicalComparison").toMap();
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>📊 Порівняння з історичними даними</h3>";
+            report += "<ul style='margin-left:18px; line-height: 1.65;'>";
+            report += QString("<li><b>Відхилення продуктивності:</b> %1</li>").arg(historical.value("damageDeviation").toString());
+            report += QString("<li><b>Порівняння з середнім уроном:</b> %1</li>").arg(historical.value("vsAverageDamage").toString());
+            report += QString("<li><b>Оцінка продуктивності:</b> %1</li>").arg(historical.value("performanceGrade").toString());
+            QVariantMap recommendations = historical.value("recommendations").toMap();
+            if (!recommendations.isEmpty()) {
+                report += "<li><b>Рекомендації на основі історії:</b></li>";
+                report += "<ul style='margin-left: 20px;'>";
+                if (recommendations.contains("primary")) {
+                    report += QString("<li>Основна: %1</li>").arg(recommendations.value("primary").toString());
+                }
+                if (recommendations.contains("secondary")) {
+                    report += QString("<li>Другорядна: %1</li>").arg(recommendations.value("secondary").toString());
+                }
+                if (recommendations.contains("tertiary")) {
+                    report += QString("<li>Додаткова: %1</li>").arg(recommendations.value("tertiary").toString());
+                }
+                report += "</ul>";
+            }
+            report += "</ul>";
+        }
+
+        // Прогнозування продуктивності
+        if (behavior.contains("performancePrediction")) {
+            QVariantMap prediction = behavior.value("performancePrediction").toMap();
+            report += "<h3 style='margin:12px 0 8px 0; font-size:14px; color:#aabfff;'>🔮 Прогнозування продуктивності</h3>";
+            report += "<ul style='margin-left:18px; line-height: 1.65;'>";
+            report += QString("<li><b>Ймовірність перемоги:</b> %1</li>").arg(prediction.value("winProbability").toString());
+            report += QString("<li><b>Очікувана шкода:</b> %1</li>").arg(prediction.value("expectedDamage").toString());
+            report += QString("<li><b>Рівень ризику:</b> %1</li>").arg(prediction.value("riskLevel").toString());
+            report += QString("<li><b>Рекомендована стратегія:</b> %1</li>").arg(prediction.value("recommendedStrategy").toString());
+            report += "</ul>";
+        }
     }
 
     report += "<h2 style='margin-top:14px; font-size:16px; color:#9fc4ff;'>Персональні рекомендації</h2>";

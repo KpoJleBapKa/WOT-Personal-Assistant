@@ -88,7 +88,7 @@ QVariantMap DatabaseManager::getReplayData(const QString &filePath) {
 bool DatabaseManager::clearAllData() {
     m_replays.clear();
     if (saveData()) {
-        QMessageBox::information(nullptr, "Готово", "Всі дані успішно скинуто.");
+        //QMessageBox::information(nullptr, "Готово", "Всі дані успішно скинуто.");
         return true;
     } else {
         QMessageBox::critical(nullptr, "Помилка", "Не вдалося скинути дані.");

@@ -23,7 +23,7 @@ inline QString cleanNameForLookup(const QString& techName) {
     if (lowerTechName.contains("vk7201")) return "VK 72.01 (K)";
     if (lowerTechName.contains("lewandowskiego")) return "60TP Lewandowskiego";
     if (lowerTechName.contains("wz-111_5a")) return "WZ-111 5A";
-    if (lowerTechName.contains("t95_fv4201_chieftain")) return "Chieftain T95/FV4201";
+    //if (lowerTechName.contains("t95_fv4201_chieftain")) return "Chieftain T95/FV4201";
 
     if (techName.contains("_")) {
         QStringList parts = techName.split("_");

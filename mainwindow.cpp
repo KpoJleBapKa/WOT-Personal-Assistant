@@ -17,7 +17,7 @@
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
-    setWindowTitle("WoT Replay Analyzer");
+    setWindowTitle("WOT Personal Assistant");
     resize(1200, 800);
 
     // Встановлюємо загальну темну тему для всього застосунку
@@ -129,13 +129,13 @@ void MainWindow::onMenuClicked(QListWidgetItem *item) {
         m_stackedWidget->setCurrentIndex(0);
     } else if (item->text() == "Профіль гравця") {
         m_stackedWidget->setCurrentIndex(1);
-        m_profilePage->refreshProfile(); // ❗️ Викликаємо оновлення при кожному відкритті вкладки
+        m_profilePage->refreshProfile();
     }
 }
 
 void MainWindow::showAboutDialog() {
     QMessageBox::about(this, "Про застосунок",
-                       "<h2>Аналізатор реплеїв WoT</h2>"
+                       "<h2>WOT Personal Assistant</h2>"
                        "<p>Розроблено для аналізу ігрової поведінки та надання персоналізованих рекомендацій гравцям.</p>"
                        "<p>Версія: 1.0</p>");
 }

@@ -14,12 +14,14 @@ QString BehaviorAnalyzer::getPerformanceGrade(double totalDamage, double assiste
     if (vehicleType.contains("light", Qt::CaseInsensitive)) { mainMetric = assistedDamage; } else { mainMetric = totalDamage; }
     if (!vehicleType.contains("light", Qt::CaseInsensitive)) {
         switch (tier) {
+        case 11: if (mainMetric >= 6000) return "Еталонний"; if (mainMetric >= 5000) return "Дуже хороший"; if (mainMetric >= 4500) return "Хороший"; if (mainMetric >= 4000) return "Непоганий"; if (mainMetric >= 3500) return "Посередній"; if (mainMetric >= 3000) return "Нижче середнього"; if (mainMetric >= 2500) return "Поганий"; break;
         case 10: if (mainMetric >= 5000) return "Еталонний"; if (mainMetric >= 4000) return "Дуже хороший"; if (mainMetric >= 3500) return "Хороший"; if (mainMetric >= 3000) return "Непоганий"; if (mainMetric >= 2500) return "Посередній"; if (mainMetric >= 2000) return "Нижче середнього"; if (mainMetric >= 1500) return "Поганий"; break;
         case 9: if (mainMetric >= 4000) return "Еталонний"; if (mainMetric >= 3500) return "Дуже хороший"; if (mainMetric >= 3000) return "Хороший"; if (mainMetric >= 2500) return "Непоганий"; if (mainMetric >= 2000) return "Посередній"; if (mainMetric >= 1500) return "Нижче середнього"; if (mainMetric >= 1000) return "Поганий"; break;
         case 8: if (vehicleType.contains("heavy", Qt::CaseInsensitive)) { if (mainMetric >= 3500) return "Еталонний"; if (mainMetric >= 3000) return "Дуже хороший"; if (mainMetric >= 2500) return "Хороший"; if (mainMetric >= 2000) return "Непоганий"; if (mainMetric >= 1500) return "Посередній"; if (mainMetric >= 1000) return "Нижче середнього"; if (mainMetric >= 1000) return "Поганий"; } else { if (mainMetric >= 3000) return "Еталонний"; if (mainMetric >= 2500) return "Хороший"; if (mainMetric >= 2000) return "Непоганий"; if (mainMetric >= 1500) return "Посередній"; if (mainMetric >= 1000) return "Нижче середнього"; if (mainMetric >= 1000) return "Поганий"; } break;
         }
     } else {
         switch (tier) {
+        case 11: if (mainMetric >= 7000) return "Еталонний"; if (mainMetric >= 6000) return "Дуже хороший"; if (mainMetric >= 5500) return "Хороший"; if (mainMetric >= 5000) return "Непоганий"; if (mainMetric >= 4000) return "Посередній"; if (mainMetric >= 3500) return "Нижче середнього"; if (mainMetric >= 3000) return "Поганий"; break;
         case 10: if (mainMetric >= 6000) return "Еталонний"; if (mainMetric >= 5000) return "Дуже хороший"; if (mainMetric >= 4500) return "Хороший"; if (mainMetric >= 4000) return "Непоганий"; if (mainMetric >= 3000) return "Посередній"; if (mainMetric >= 2500) return "Нижче середнього"; if (mainMetric >= 2000) return "Поганий"; break;
         case 9: if (mainMetric >= 5000) return "Еталонний"; if (mainMetric >= 4500) return "Дуже хороший"; if (mainMetric >= 4000) return "Хороший"; if (mainMetric >= 3500) return "Непоганий"; if (mainMetric >= 3000) return "Посередній"; if (mainMetric >= 2000) return "Нижче середнього"; if (mainMetric >= 1500) return "Поганий"; break;
         case 8: if (mainMetric >= 5000) return "Еталонний"; if (mainMetric >= 4500) return "Дуже хороший"; if (mainMetric >= 3500) return "Хороший"; if (mainMetric >= 3000) return "Непоганий"; if (mainMetric >= 2500) return "Посередній"; if (mainMetric >= 2000) return "Нижче середнього"; if (mainMetric >= 2000) return "Поганий"; break;
@@ -687,7 +689,7 @@ QStringList BehaviorAnalyzer::identifyPrimaryWeaknesses(const QVariantMap &metri
     if (tactics.defensiveness < 30) weaknesses << "Слабка оборона";
     if (tactics.supportiveness < 30) weaknesses << "Погана підтримка команди";
     if (tactics.positioning < 30) weaknesses << "Неправильне позиціонування";
-    if (tactics.mapControl < 30) weaknesses << "Слабкий контроль карти";
+    //if (tactics.mapControl < 30) weaknesses << "Слабкий контроль карти";
     if (tactics.initiative < 30) weaknesses << "Відсутність ініціативи";
     
     return weaknesses;

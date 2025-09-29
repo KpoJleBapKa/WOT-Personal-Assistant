@@ -552,6 +552,33 @@ inline const QMap<QString, VehicleInfo> vehicleMap = {
     {"SMV CC-67", {7, "AT-SPG", "SMV CC-67"}},
     {"Semovente M43 Bassotto", {6, "AT-SPG", "Semovente M43 Bassotto"}},
     {"Semovente M41", {5, "AT-SPG", "Semovente M41"}},
+
+    // ======================================================================
+    // === TIER 11 VEHICLES (World of Tanks 2.0) ===========================
+    // ======================================================================
+    // --- Heavy Tanks ---
+    {"КР-1", {11, "heavyTank", "КР-1"}},
+    {"AMX 67 Imbattable", {11, "heavyTank", "AMX 67 Imbattable"}},
+    {"FV4025 Contriver", {11, "heavyTank", "FV4025 Contriver"}},
+    {"Taschenratte", {11, "heavyTank", "Taschenratte"}},
+    {"T803", {11, "heavyTank", "T803"}},
+    {"BZ-79", {11, "heavyTank", "BZ-79"}},
+    {"Black Rock", {11, "heavyTank", "Black Rock"}},
+
+    // --- Medium Tanks ---
+    {"Объект 432У", {11, "mediumTank", "Объект 432У"}},
+    {"Leopard 120 Verbessert", {11, "mediumTank", "Leopard 120 Verbessert"}},
+    {"CS 67 Szakal", {11, "mediumTank", "CS 67 Szakal"}},
+    {"AS-XX 40 t", {11, "mediumTank", "AS-XX 40 t"}},
+    {"XM69 Hacker", {11, "mediumTank", "XM69 Hacker"}},
+
+    // --- Tank Destroyers (AT-SPG) ---
+    {"Hirschkäfer", {11, "AT-SPG", "Hirschkäfer"}},
+    {"Strv 107-12", {11, "AT-SPG", "Strv 107-12"}},
+    {"AT-FV230 Breaker", {11, "AT-SPG", "AT-FV230 Breaker"}},
+
+    // --- Light Tanks ---
+    {"LeKpz Borkenkäfer", {11, "lightTank", "LeKpz Borkenkäfer"}},
     };
 // 3. Єдина функція для отримання даних за повною технічною назвою
 inline VehicleInfo getInfoFromTechName(const QString& techName) {

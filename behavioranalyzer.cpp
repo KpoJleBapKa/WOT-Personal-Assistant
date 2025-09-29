@@ -123,7 +123,7 @@ QVariantMap BehaviorAnalyzer::analyze(const QVariantMap &replayData, const QVari
     analysis["weaknessAnalysis"] = weaknessMap;
 
     // Поведінкові інсайти
-    analysis["behavioralInsights"] = generateBehavioralInsights(replayData, metrics);
+    //analysis["behavioralInsights"] = generateBehavioralInsights(replayData, metrics);
 
     // Розширена бойова ефективність
     QVariantMap advancedCombatMap;
@@ -327,37 +327,17 @@ WeaknessAnalysis BehaviorAnalyzer::analyzeWeaknesses(const QVariantMap &replayDa
 
 double BehaviorAnalyzer::calculateAggressiveness(const QVariantMap &replayData, const QVariantMap &metrics)
 {
-    double score = 0.0;
+    Q_UNUSED(replayData)
+    // Аналізуємо агресивність на основі наданої та отриманої шкоди
+    // В пріоритеті саме отримана шкода
+    double damageDealt = metrics.value("totalDamageDealt", 0.0).toDouble();
+    double damageReceived = metrics.value("potentialDamageReceived", 0.0).toDouble();
     
-    // Фактори агресивності
-    double damageRatio = metrics.value("totalDamageDealt", 0.0).toDouble() / qMax(1.0, metrics.value("potentialDamageReceived", 1.0).toDouble());
-    double killRatio = metrics.value("kills", 0.0).toDouble() / qMax(1.0, metrics.value("spotted", 1.0).toDouble());
-    double shotsRatio = metrics.value("shots", 0.0).toDouble() / qMax(1.0, metrics.value("hits", 1.0).toDouble());
-    
-    // Аналіз подій стрільби для визначення агресивності
-    if (replayData.contains("shot_events")) {
-        QVariantList shotEvents = replayData.value("shot_events").toList();
-        double aggressiveShots = 0;
-        double totalShots = shotEvents.size();
-        
-        for (const QVariant &shotVar : shotEvents) {
-            QVariantMap shot = shotVar.toMap();
-            if (shot.value("damage").toInt() > 0 && !shot.value("isFriendlyFire").toBool()) {
-                aggressiveShots++;
-            }
-        }
-        
-        if (totalShots > 0) {
-            score += (aggressiveShots / totalShots) * 30.0;
-        }
-    }
-    
-    // Базові метрики
-    score += qMin(100.0, damageRatio * 10.0) * 0.3;
-    score += qMin(100.0, killRatio * 20.0) * 0.2;
-    score += qMin(100.0, (1.0 / qMax(0.1, shotsRatio)) * 20.0) * 0.2;
-    
-    return qMin(100.0, score);
+    // Розрахунок агресивності: 70% отримана шкода + 30% надана шкода
+    // Нормалізуємо до 100%: при 2000+ шкоди = 100%
+    double totalDamage = damageReceived * 0.7 + damageDealt * 0.3;
+    double aggression = (totalDamage / 20.0); // 2000 шкоди = 100%
+    return qMin(100.0, aggression);
 }
 
 double BehaviorAnalyzer::calculateDefensiveness(const QVariantMap &replayData, const QVariantMap &metrics)
@@ -457,25 +437,17 @@ double BehaviorAnalyzer::calculateMapControl(const QVariantMap &replayData, cons
 
 double BehaviorAnalyzer::calculateInitiative(const QVariantMap &replayData, const QVariantMap &metrics)
 {
-    double score = 0.0;
+    Q_UNUSED(replayData)
+    // Аналізуємо ініціативу на основі наданої та отриманої шкоди
+    // Ключовим показником буде надана шкода
+    double damageDealt = metrics.value("totalDamageDealt", 0.0).toDouble();
+    double damageReceived = metrics.value("potentialDamageReceived", 0.0).toDouble();
     
-    // Фактори ініціативи
-    bool isFirstBlood = metrics.value("isFirstBlood", false).toBool();
-    double earlyDamage = calculateEarlyGameDamage(replayData);
-    double totalDamage = metrics.value("totalDamageDealt", 0.0).toDouble();
-    
-    // Перша кров як показник ініціативи
-    if (isFirstBlood) {
-        score += 30.0;
-    }
-    
-    // Рання шкода як показник ініціативи
-    if (totalDamage > 0) {
-        double earlyRatio = earlyDamage / totalDamage;
-        score += qMin(70.0, earlyRatio * 100.0);
-    }
-    
-    return qMin(100.0, score);
+    // Розрахунок ініціативи: 70% надана шкода + 30% отримана шкода
+    // Нормалізуємо до 100%: при 2000+ шкоди = 100%
+    double totalDamage = damageDealt * 0.7 + damageReceived * 0.3;
+    double initiative = (totalDamage / 20.0); // 2000 шкоди = 100%
+    return qMin(100.0, initiative);
 }
 
 // ==================== МЕТОДИ ДЛЯ АНАЛІЗУ РОЛЕЙ ====================
@@ -635,8 +607,9 @@ double BehaviorAnalyzer::calculateSurvivalRate(const QVariantMap &replayData, co
 double BehaviorAnalyzer::calculateEarlyGameDamage(const QVariantMap &replayData)
 {
     Q_UNUSED(replayData)
-    // Спрощена реалізація - в реальності потрібно аналізувати події по часу
-    return 500.0; // Базове значення
+    // Аналіз ранньої шкоди на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до детальних даних по часу
+    return 0.0;
 }
 
 double BehaviorAnalyzer::calculateClutchFactor(const QVector<QVariantMap> &events, const QVariantMap &metrics)
@@ -666,36 +639,42 @@ QVector<QVariantMap> BehaviorAnalyzer::getTimeBasedEvents(const QVariantMap &rep
 double BehaviorAnalyzer::analyzePhaseEffectiveness(const QVector<QVariantMap> &events, int phase)
 {
     Q_UNUSED(events)
-    // Спрощена реалізація - в реальності потрібно аналізувати події по фазах
-    return 50.0 + (phase * 15.0); // Приклад: 50%, 65%, 80%
+    Q_UNUSED(phase)
+    // Аналіз ефективності по фазах на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до детальних даних по фазах
+    return 0.0;
 }
 
 double BehaviorAnalyzer::analyzeCommunication(const QVariantMap &replayData)
 {
     Q_UNUSED(replayData)
-    // Спрощена реалізація - в реальності потрібно аналізувати чат та команди
-    return 60.0; // Базовий рівень
+    // Аналіз комунікації на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до чату
+    return 0.0;
 }
 
 double BehaviorAnalyzer::analyzeCoordination(const QVariantMap &replayData)
 {
     Q_UNUSED(replayData)
-    // Спрощена реалізація - в реальності потрібно аналізувати взаємодію з командою
-    return 55.0; // Базовий рівень
+    // Аналіз координації на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до командних дій
+    return 0.0;
 }
 
 double BehaviorAnalyzer::analyzeLeadership(const QVariantMap &replayData)
 {
     Q_UNUSED(replayData)
-    // Спрощена реалізація - в реальності потрібно аналізувати лідерські якості
-    return 45.0; // Базовий рівень
+    // Аналіз лідерства на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до лідерських дій
+    return 0.0;
 }
 
 double BehaviorAnalyzer::analyzeAdaptability(const QVariantMap &replayData)
 {
     Q_UNUSED(replayData)
-    // Спрощена реалізація - в реальності потрібно аналізувати адаптивність
-    return 50.0; // Базовий рівень
+    // Аналіз адаптивності на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до даних про зміни стилю
+    return 0.0;
 }
 
 QStringList BehaviorAnalyzer::identifyPrimaryWeaknesses(const QVariantMap &metrics, const AdvancedTacticalPattern &tactics, const RoleEffectiveness &roles)
@@ -717,13 +696,12 @@ QStringList BehaviorAnalyzer::identifyPrimaryWeaknesses(const QVariantMap &metri
 QStringList BehaviorAnalyzer::identifySecondaryWeaknesses(const QVariantMap &metrics, const AdvancedCombatEfficiency &combat, const TeamSynergy &team)
 {
     Q_UNUSED(metrics)
+    Q_UNUSED(team)
     QStringList weaknesses;
     
     if (combat.accuracy < 50) weaknesses << "Низька точність стрільби";
     if (combat.penetrationRate < 50) weaknesses << "Погана ефективність пробиття";
     if (combat.survivalRate < 50) weaknesses << "Низька виживаність";
-    if (team.communication < 40) weaknesses << "Слабка комунікація";
-    if (team.coordination < 40) weaknesses << "Погана координація";
     
     return weaknesses;
 }
@@ -761,51 +739,28 @@ double BehaviorAnalyzer::calculateOverallRating(const QVariantMap &metrics, cons
 QString BehaviorAnalyzer::getDetailedPerformanceDescription(const QVariantMap &metrics, const AdvancedTacticalPattern &tactics)
 {
     Q_UNUSED(metrics)
-    QString description = "Детальний аналіз поведінки:\n\n";
+    QString description = "";
     
     // Аналіз тактичних паттернів
     if (tactics.aggressiveness > 70) {
-        description += "• Високоагресивний стиль гри з активною атакою\n";
+        description += "Високоагресивний стиль гри з активною атакою\n";
     } else if (tactics.aggressiveness < 30) {
-        description += "• Обережний стиль гри з акцентом на виживання\n";
+        description += "Обережний стиль гри з акцентом на виживання\n";
     } else {
-        description += "• Збалансований стиль гри\n";
+        description += "Збалансований стиль гри\n";
     }
     
     if (tactics.defensiveness > 70) {
-        description += "• Відмінне використання покриття та броні\n";
+        description += "Відмінне використання покриття та броні\n";
     }
     
     if (tactics.supportiveness > 70) {
-        description += "• Ефективна підтримка команди\n";
+        description += "Ефективна підтримка команди\n";
     }
     
     return description;
 }
 
-QString BehaviorAnalyzer::generateBehavioralInsights(const QVariantMap &replayData, const QVariantMap &metrics)
-{
-    Q_UNUSED(replayData)
-    QString insights = "Поведінкові інсайти:\n\n";
-    
-    double totalDamage = metrics.value("totalDamageDealt", 0.0).toDouble();
-    double assistedDamage = metrics.value("damageAssisted", 0.0).toDouble();
-    
-    if (assistedDamage > totalDamage) {
-        insights += "• Гравець ефективно працює в команді\n";
-    }
-    
-    if (metrics.value("isFirstBlood").toBool()) {
-        insights += "• Проявив ініціативу в початку бою\n";
-    }
-    
-    int achievements = metrics.value("achievementsCount", 0).toInt();
-    if (achievements > 3) {
-        insights += "• Високий рівень досягнень\n";
-    }
-    
-    return insights;
-}
 
 QVariantMap BehaviorAnalyzer::createDetailedReport(const QVariantMap &replayData, const QVariantMap &metrics)
 {
@@ -843,17 +798,18 @@ PositionData BehaviorAnalyzer::analyzePositioning(const QVariantMap &replayData,
 
 PlayerStatistics BehaviorAnalyzer::loadPlayerStatistics(const QString &playerName)
 {
+    Q_UNUSED(playerName)
     PlayerStatistics stats;
     stats.playerName = playerName;
     
-    // В реальній реалізації тут буде завантаження з бази даних
-    // Поки що повертаємо базові значення
-    stats.totalBattles = 100;
-    stats.winRate = 55.0;
-    stats.averageDamage = 1500.0;
-    stats.averageAssists = 800.0;
-    stats.averageKills = 1.2;
-    stats.averageSurvival = 60.0;
+    // Завантаження статистики гравця з бази даних
+    // Поки що повертаємо нульові значення, оскільки немає доступу до бази даних
+    stats.totalBattles = 0;
+    stats.winRate = 0.0;
+    stats.averageDamage = 0.0;
+    stats.averageAssists = 0.0;
+    stats.averageKills = 0.0;
+    stats.averageSurvival = 0.0;
     
     return stats;
 }
@@ -917,11 +873,10 @@ QVariantMap BehaviorAnalyzer::predictPerformance(const QVariantMap &replayData, 
 double BehaviorAnalyzer::calculateAdaptability(const QVariantMap &replayData, const QVariantMap &metrics)
 {
     Q_UNUSED(replayData)
-    // Аналізуємо зміни в стилі гри протягом бою
-    double damageVariation = calculateDamageVariation(metrics);
-    double roleFlexibility = calculateRoleFlexibility(replayData, metrics);
-    
-    return qMin(100.0, (damageVariation + roleFlexibility) / 2.0);
+    Q_UNUSED(metrics)
+    // Аналіз адаптивності на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до даних про зміни стилю
+    return 0.0;
 }
 
 double BehaviorAnalyzer::calculateRiskTaking(const QVariantMap &replayData, const QVariantMap &metrics)
@@ -938,12 +893,10 @@ double BehaviorAnalyzer::calculateRiskTaking(const QVariantMap &replayData, cons
 double BehaviorAnalyzer::calculatePatience(const QVariantMap &replayData, const QVariantMap &metrics)
 {
     Q_UNUSED(replayData)
-    // Аналізуємо терпіння на основі часу між пострілами та позиціонування
-    double shots = metrics.value("shots", 0.0).toDouble();
-    double battleTime = calculateSurvivalTime(replayData);
-    double shotFrequency = (battleTime > 0) ? shots / (battleTime / 60.0) : 0.0;
-    
-    return qMin(100.0, qMax(0.0, 100.0 - shotFrequency * 10.0));
+    Q_UNUSED(metrics)
+    // Аналіз терпіння на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до детальних даних про час між пострілами
+    return 0.0;
 }
 
 double BehaviorAnalyzer::calculateDecisionMaking(const QVariantMap &replayData, const QVariantMap &metrics)
@@ -961,12 +914,10 @@ double BehaviorAnalyzer::calculateDecisionMaking(const QVariantMap &replayData, 
 double BehaviorAnalyzer::calculateResourceManagement(const QVariantMap &replayData, const QVariantMap &metrics)
 {
     Q_UNUSED(replayData)
-    // Аналізуємо управління ресурсами (боєприпаси, здоров'я, позиція)
-    double ammoEfficiency = calculateAmmoEfficiency(replayData, metrics);
-    double survivalRate = calculateSurvivalRate(replayData, metrics);
-    double positioning = calculatePositioning(replayData, metrics);
-    
-    return (ammoEfficiency + survivalRate + positioning) / 3.0;
+    Q_UNUSED(metrics)
+    // Аналіз управління ресурсами на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до детальних даних про ресурси
+    return 0.0;
 }
 
 double BehaviorAnalyzer::calculateSituationalAwareness(const QVariantMap &replayData, const QVariantMap &metrics)
@@ -984,17 +935,18 @@ double BehaviorAnalyzer::calculateSituationalAwareness(const QVariantMap &replay
 
 PositionData BehaviorAnalyzer::extractPositionData(const QVariantMap &replayData)
 {
+    Q_UNUSED(replayData)
     PositionData position;
     
-    // В реальній реалізації тут буде витягування координат з реплею
-    // Поки що використовуємо базові значення
-    position.x = 100.0;
-    position.y = 100.0;
+    // Витягування координат з реплею на основі доступних даних
+    // Поки що використовуємо нульові значення, оскільки немає доступу до координат
+    position.x = 0.0;
+    position.y = 0.0;
     position.z = 0.0;
     position.distanceToEnemies = calculateDistanceToEnemies(replayData);
     position.distanceToAllies = calculateDistanceToAllies(replayData);
-    position.mapPosition = 50.0;
-    position.zone = "center";
+    position.mapPosition = 0.0;
+    position.zone = "unknown";
     position.coverUsage = calculateCoverUsage(replayData);
     position.mobility = calculateMobility(replayData);
     
@@ -1004,38 +956,42 @@ PositionData BehaviorAnalyzer::extractPositionData(const QVariantMap &replayData
 double BehaviorAnalyzer::calculateDistanceToEnemies(const QVariantMap &replayData)
 {
     Q_UNUSED(replayData)
-    // Спрощена реалізація - в реальності потрібно аналізувати позиції ворогів
-    return 150.0; // метри
+    // Аналіз відстані до ворогів на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до координат ворогів
+    return 0.0;
 }
 
 double BehaviorAnalyzer::calculateDistanceToAllies(const QVariantMap &replayData)
 {
     Q_UNUSED(replayData)
-    // Спрощена реалізація - в реальності потрібно аналізувати позиції союзників
-    return 100.0; // метри
+    // Аналіз відстані до союзників на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до координат союзників
+    return 0.0;
 }
 
 QString BehaviorAnalyzer::determineMapZone(const PositionData &position, const QString &mapName)
 {
     Q_UNUSED(mapName)
-    // Визначаємо зону карти на основі позиції
-    if (position.mapPosition < 30) return "flank";
-    if (position.mapPosition > 70) return "base";
-    return "center";
+    Q_UNUSED(position)
+    // Визначення зони карти на основі доступних даних
+    // Поки що повертаємо "unknown", оскільки немає доступу до координат
+    return "unknown";
 }
 
 double BehaviorAnalyzer::calculateCoverUsage(const QVariantMap &replayData)
 {
     Q_UNUSED(replayData)
-    // Аналізуємо використання покриття
-    return 65.0; // Базове значення
+    // Аналіз використання покриття на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до даних про покриття
+    return 0.0;
 }
 
 double BehaviorAnalyzer::calculateMobility(const QVariantMap &replayData)
 {
     Q_UNUSED(replayData)
-    // Аналізуємо мобільність гравця
-    return 70.0; // Базове значення
+    // Аналіз мобільності гравця на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до даних про рух
+    return 0.0;
 }
 
 QVector<double> BehaviorAnalyzer::extractFeatures(const QVariantMap &replayData, const QVariantMap &metrics)
@@ -1120,8 +1076,9 @@ double BehaviorAnalyzer::calculatePerformanceDeviation(const QVariantMap &curren
 {
     Q_UNUSED(currentBattle)
     Q_UNUSED(historicalData)
-    // Розраховуємо відхилення поточної продуктивності від історичної
-    return 15.0; // Базове значення
+    // Розрахунок відхилення поточної продуктивності від історичної
+    // Поки що повертаємо 0, оскільки немає доступу до історичних даних
+    return 0.0;
 }
 
 QVariantMap BehaviorAnalyzer::generateImprovementRecommendations(const QVariantMap &currentBattle, const PlayerStatistics &historicalData)
@@ -1141,16 +1098,18 @@ double BehaviorAnalyzer::calculateMapTypeEffectiveness(const QString &mapType, c
 {
     Q_UNUSED(mapType)
     Q_UNUSED(metrics)
-    // Розраховуємо ефективність на різних типах карт
-    return 65.0; // Базове значення
+    // Розрахунок ефективності на різних типах карт на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до історичних даних по картах
+    return 0.0;
 }
 
 double BehaviorAnalyzer::calculateVehicleTypeEffectiveness(const QString &vehicleType, const QVariantMap &metrics)
 {
     Q_UNUSED(vehicleType)
     Q_UNUSED(metrics)
-    // Розраховуємо ефективність з різними типами техніки
-    return 70.0; // Базове значення
+    // Розрахунок ефективності з різними типами техніки на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до історичних даних по техніці
+    return 0.0;
 }
 
 // ==================== ДОДАТКОВІ МЕТОДИ ДЛЯ РОЗШИРЕНОГО АНАЛІЗУ ====================
@@ -1172,15 +1131,17 @@ QString BehaviorAnalyzer::determinePreferredZone(const QVariantMap &replayData, 
 {
     Q_UNUSED(replayData)
     Q_UNUSED(metrics)
-    // Визначаємо улюблену зону гравця на основі історичних даних
-    return "center";
+    // Визначення улюбленої зони гравця на основі доступних даних
+    // Поки що повертаємо "unknown", оскільки немає доступу до історичних даних
+    return "unknown";
 }
 
 double BehaviorAnalyzer::calculateAveragePosition(const QVariantMap &replayData)
 {
     Q_UNUSED(replayData)
-    // Розраховуємо середню позицію гравця на карті
-    return 50.0;
+    // Розрахунок середньої позиції гравця на карті на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до координат
+    return 0.0;
 }
 
 QVector<PositionData> BehaviorAnalyzer::extractPositionHistory(const QVariantMap &replayData)
@@ -1223,24 +1184,27 @@ double BehaviorAnalyzer::calculateCriticalHitRate(const QVariantMap &replayData,
 {
     Q_UNUSED(replayData)
     Q_UNUSED(metrics)
-    // Аналізуємо частоту критичних ударів
-    return 15.0; // Базове значення
+    // Аналіз частоти критичних ударів на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до даних про критичні удари
+    return 0.0;
 }
 
 double BehaviorAnalyzer::calculateModuleDamage(const QVariantMap &replayData, const QVariantMap &metrics)
 {
     Q_UNUSED(replayData)
     Q_UNUSED(metrics)
-    // Аналізуємо пошкодження модулів
-    return 25.0; // Базове значення
+    // Аналіз пошкодження модулів на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до даних про модулі
+    return 0.0;
 }
 
 double BehaviorAnalyzer::calculateCrewDamage(const QVariantMap &replayData, const QVariantMap &metrics)
 {
     Q_UNUSED(replayData)
     Q_UNUSED(metrics)
-    // Аналізуємо пошкодження екіпажу
-    return 10.0; // Базове значення
+    // Аналіз пошкодження екіпажу на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до даних про екіпаж
+    return 0.0;
 }
 
 double BehaviorAnalyzer::calculateFireRate(const QVariantMap &replayData, const QVariantMap &metrics)
@@ -1256,8 +1220,9 @@ double BehaviorAnalyzer::calculateReloadEfficiency(const QVariantMap &replayData
 {
     Q_UNUSED(replayData)
     Q_UNUSED(metrics)
-    // Аналізуємо ефективність перезарядки
-    return 80.0; // Базове значення
+    // Аналіз ефективності перезарядки на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до даних про перезарядку
+    return 0.0;
 }
 
 double BehaviorAnalyzer::calculateRoleFlexibility(const QVariantMap &replayData, const QVariantMap &metrics)
@@ -1314,8 +1279,9 @@ double BehaviorAnalyzer::calculateConflictResolution(const QVariantMap &replayDa
 {
     Q_UNUSED(replayData)
     Q_UNUSED(metrics)
-    // Аналізуємо вирішення конфліктів (складно визначити з реплею)
-    return 60.0; // Базове значення
+    // Аналіз вирішення конфліктів на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до даних про конфлікти
+    return 0.0;
 }
 
 double BehaviorAnalyzer::calculateResourceSharing(const QVariantMap &replayData, const QVariantMap &metrics)
@@ -1342,8 +1308,9 @@ double BehaviorAnalyzer::calculateTacticalAwareness(const QVariantMap &replayDat
 double BehaviorAnalyzer::calculateDamageVariation(const QVariantMap &metrics)
 {
     Q_UNUSED(metrics)
-    // Розраховуємо варіацію шкоди (показник адаптивності)
-    return 70.0; // Базове значення
+    // Розрахунок варіації шкоди (показник адаптивності) на основі доступних даних
+    // Поки що повертаємо 0, оскільки немає доступу до даних про варіацію
+    return 0.0;
 }
 
 QString BehaviorAnalyzer::generateStrategyRecommendation(double winProbability, const QVariantMap &metrics)
